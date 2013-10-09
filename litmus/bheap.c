@@ -19,7 +19,6 @@ void bheap_node_init(struct bheap_node** _h, void* value)
 	h->ref    = _h;
 }
 
-
 /* make child a subtree of root */
 static void __bheap_link(struct bheap_node* root,
 			struct bheap_node* child)
@@ -152,6 +151,20 @@ static struct bheap_node* __bheap_extract_min(bheap_prio_t higher_prio,
 		heap->head = node->next;
 	__bheap_union(higher_prio, heap, __bheap_reverse(node->child));
 	return node;
+}
+
+static void __bheap_for_each(struct bheap_node *h, bheap_for_each_t fn, void* args)
+{
+	/* apply fn to all nodes. beware of recursion. */
+
+	/* pre-order */
+	fn(h, args);
+
+	/* depth-first */
+	if (h->child)
+		__bheap_for_each(h->child, fn, args);
+	if (h->next)
+		__bheap_for_each(h->next, fn, args);
 }
 
 /* insert (and reinitialize) a node into the heap */
@@ -313,4 +326,9 @@ void* bheap_take_del(bheap_prio_t higher_prio,
 		bheap_node_free(hn);
 	}
 	return ret;
+}
+
+void bheap_for_each(struct bheap* heap, bheap_for_each_t fn, void* args)
+{
+	__bheap_for_each(heap->head, fn, args);
 }

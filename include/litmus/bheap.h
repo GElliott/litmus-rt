@@ -41,6 +41,10 @@ static inline int bheap_empty(struct bheap* heap)
 	return heap->head == NULL && heap->min == NULL;
 }
 
+typedef void (*bheap_for_each_t)(struct bheap_node* node, void* args);
+
+void bheap_for_each(struct bheap* heap, bheap_for_each_t fn, void* args);
+
 /* insert (and reinitialize) a node into the heap */
 void bheap_insert(bheap_prio_t higher_prio,
 		 struct bheap* heap,

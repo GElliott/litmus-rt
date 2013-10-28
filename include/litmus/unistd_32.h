@@ -18,4 +18,9 @@
 #define __NR_release_ts		__LSC(10)
 #define __NR_null_call		__LSC(11)
 
-#define NR_litmus_syscalls 12
+#define __NR_litmus_dgl_lock	__LSC(12)
+#define __NR_litmus_dgl_unlock	__LSC(13)
+#define __NR_litmus_should_unlock __LSC(14)
+#define __NR_litmus_dgl_should_unlock __LSC(15)
+
+#define NR_litmus_syscalls 16

@@ -29,5 +29,13 @@ __SYSCALL(__NR_wait_for_ts_release, sys_wait_for_ts_release)
 __SYSCALL(__NR_release_ts, sys_release_ts)
 #define __NR_null_call				__LSC(11)
 __SYSCALL(__NR_null_call, sys_null_call)
+#define __NR_litmus_dgl_lock		__LSC(12)
+__SYSCALL(__NR_litmus_dgl_lock, sys_litmus_dgl_lock)
+#define __NR_litmus_dgl_unlock		__LSC(13)
+__SYSCALL(__NR_litmus_dgl_unlock, sys_litmus_dgl_unlock)
+#define __NR_litmus_should_yield_lock	__LSC(14)
+__SYSCALL(__NR_litmus_should_yield_lock, sys_litmus_should_yield_lock)
+#define __NR_litmus_dgl_should_yield_lock	__LSC(15)
+__SYSCALL(__NR_litmus_dgl_should_yield_lock, sys_litmus_dgl_should_yield_lock)
 
-#define NR_litmus_syscalls 12
+#define NR_litmus_syscalls 16

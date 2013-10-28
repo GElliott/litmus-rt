@@ -134,6 +134,9 @@ struct control_page {
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
 
+#include <linux/semaphore.h>
+#include <litmus/binheap.h>
+
 struct _rt_domain;
 struct bheap_node;
 struct release_heap;
@@ -193,6 +196,18 @@ struct rt_param {
 	unsigned int		num_locks_held;
 	/* How many PCP/SRP locks does the task currently hold/wait for? */
 	unsigned int		num_local_locks_held;
+#endif
+
+#ifdef CONFIG_LITMUS_NESTED_LOCKING
+	raw_spinlock_t			hp_blocked_tasks_lock;
+	struct binheap			hp_blocked_tasks;
+
+	/* pointer to lock upon which is currently blocked */
+	struct litmus_lock* blocked_lock;
+	unsigned long	blocked_lock_data;
+
+	struct litmus_lock* outermost_lock;
+	unsigned int	virtually_unlocked:1;
 #endif
 
 	/* user controlled parameters */

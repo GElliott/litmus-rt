@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/percpu.h>
+#include <linux/hardirq.h>
 
 #include <litmus/ftdev.h>
 #include <litmus/litmus.h>
@@ -16,6 +17,10 @@
 #include <litmus/ftdev.h>
 
 #define NO_EVENTS		(1 << CONFIG_SCHED_TASK_TRACE_SHIFT)
+
+#ifdef CONFIG_SCHED_LITMUS_TRACEPOINT
+#define CREATE_TRACE_POINTS
+#endif
 
 #define now() litmus_clock()
 
@@ -186,6 +191,10 @@ feather_callback void do_sched_trace_task_completion(unsigned long id,
 	struct st_event_record* rec = get_record(ST_COMPLETION, t);
 	if (rec) {
 		rec->data.completion.when   = now();
+#if 0
+		rec->data.completion.backlog_remaining = tsk_rt(t)->job_params.backlog;
+		rec->data.completion.was_backlog_job = tsk_rt(t)->job_params.is_backlogged_job;
+#endif
 		rec->data.completion.forced = forced;
 		put_record(rec);
 	}
@@ -198,6 +207,17 @@ feather_callback void do_sched_trace_task_block(unsigned long id,
 	struct st_event_record* rec = get_record(ST_BLOCK, t);
 	if (rec) {
 		rec->data.block.when      = now();
+
+		// hiding is turned on by locking protocols, so if there isn't any
+		// hiding, then we're blocking for some other reason.  assume it's I/O.
+		rec->data.block.for_io  = !tsk_rt(t)->blocked_lock || (0
+#ifdef CONFIG_REALTIME_AUX_TASKS
+			|| (tsk_rt(t)->has_aux_tasks && !tsk_rt(t)->hide_from_aux_tasks)
+#endif
+#ifdef CONFIG_LITMUS_NVIDIA
+			|| (tsk_rt(t)->held_gpus && !tsk_rt(t)->hide_from_gpu)
+#endif
+			);
 		put_record(rec);
 	}
 }
@@ -225,9 +245,10 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 	}
 }
 
+#if 0
 feather_callback void do_sched_trace_action(unsigned long id,
-					    unsigned long _task,
-					    unsigned long action)
+				unsigned long _task,
+				unsigned long action)
 {
 	struct task_struct *t = (struct task_struct*) _task;
 	struct st_event_record* rec = get_record(ST_ACTION, t);
@@ -238,3 +259,250 @@ feather_callback void do_sched_trace_action(unsigned long id,
 		put_record(rec);
 	}
 }
+
+feather_callback void do_sched_trace_migration(unsigned long id,
+				unsigned long _task,
+				unsigned long _mig_info)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record *rec = get_record(ST_MIGRATION, t);
+
+	if (rec) {
+		struct migration_info* mig_info = (struct migration_info*) _mig_info;
+
+		rec->hdr.extra = mig_info->distance;
+		rec->data.migration.observed = mig_info->observed;
+		rec->data.migration.estimated = mig_info->estimated;
+
+		put_record(rec);
+	}
+}
+#endif
+
+feather_callback void do_sched_trace_lock(unsigned long id,
+				unsigned long _task,
+				unsigned long _lock_id,
+				unsigned long _acquired)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record *rec = get_record(ST_LOCK, t);
+
+	if (rec) {
+		rec->data.lock.when = now();
+		rec->data.lock.lock_id = _lock_id;
+		rec->data.lock.acquired = _acquired;
+		put_record(rec);
+	}
+}
+
+#if 0
+feather_callback void do_sched_trace_tasklet_release(unsigned long id,
+				unsigned long _owner,
+				unsigned long _device)
+{
+	struct task_struct *t = (struct task_struct*) _owner;
+	struct st_event_record *rec = get_record(ST_TASKLET_RELEASE, t);
+
+	if (rec) {
+		rec->data.tasklet_release.when = now();
+		rec->data.tasklet_release.device = _device;
+		put_record(rec);
+	}
+}
+
+
+feather_callback void do_sched_trace_tasklet_begin(unsigned long id,
+				unsigned long _owner)
+{
+	struct task_struct *t = (struct task_struct*) _owner;
+	struct st_event_record *rec = get_record(ST_TASKLET_BEGIN, t);
+
+	if (rec) {
+		rec->data.tasklet_begin.when = now();
+
+		if(!in_interrupt())
+			rec->data.tasklet_begin.exe_pid = current->pid;
+		else
+			rec->data.tasklet_begin.exe_pid = 0;
+
+		put_record(rec);
+	}
+}
+EXPORT_SYMBOL(do_sched_trace_tasklet_begin);
+
+
+feather_callback void do_sched_trace_tasklet_end(unsigned long id,
+				unsigned long _owner,
+				unsigned long _flushed)
+{
+	struct task_struct *t = (struct task_struct*) _owner;
+	struct st_event_record *rec = get_record(ST_TASKLET_END, t);
+
+	if (rec) {
+		rec->data.tasklet_end.when = now();
+		rec->data.tasklet_end.flushed = _flushed;
+
+		if(!in_interrupt())
+			rec->data.tasklet_end.exe_pid = current->pid;
+		else
+			rec->data.tasklet_end.exe_pid = 0;
+
+		put_record(rec);
+	}
+}
+EXPORT_SYMBOL(do_sched_trace_tasklet_end);
+
+
+feather_callback void do_sched_trace_work_release(unsigned long id,
+				unsigned long _owner,
+				unsigned long _device)
+{
+	struct task_struct *t = (struct task_struct*) _owner;
+	struct st_event_record *rec = get_record(ST_WORK_RELEASE, t);
+
+	if (rec) {
+		rec->data.work_release.when = now();
+		rec->data.work_release.device = _device;
+		put_record(rec);
+	}
+}
+
+
+feather_callback void do_sched_trace_work_begin(unsigned long id,
+				unsigned long _owner,
+				unsigned long _exe)
+{
+	struct task_struct *t = (struct task_struct*) _owner;
+	struct st_event_record *rec = get_record(ST_WORK_BEGIN, t);
+
+	if (rec) {
+		struct task_struct *exe = (struct task_struct*) _exe;
+		rec->data.work_begin.exe_pid = exe->pid;
+		rec->data.work_begin.when = now();
+		put_record(rec);
+	}
+}
+EXPORT_SYMBOL(do_sched_trace_work_begin);
+
+
+feather_callback void do_sched_trace_work_end(unsigned long id,
+				unsigned long _owner,
+				unsigned long _exe,
+				unsigned long _flushed)
+{
+	struct task_struct *t = (struct task_struct*) _owner;
+	struct st_event_record *rec = get_record(ST_WORK_END, t);
+
+	if (rec) {
+		struct task_struct *exe = (struct task_struct*) _exe;
+		rec->data.work_end.exe_pid = exe->pid;
+		rec->data.work_end.flushed = _flushed;
+		rec->data.work_end.when = now();
+		put_record(rec);
+	}
+}
+EXPORT_SYMBOL(do_sched_trace_work_end);
+#endif
+
+feather_callback void do_sched_trace_eff_prio_change(unsigned long id,
+				unsigned long _task,
+				unsigned long _inh)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record *rec = get_record(ST_EFF_PRIO_CHANGE, t);
+
+	if (rec) {
+		struct task_struct *inh = (struct task_struct*) _inh;
+		rec->data.effective_priority_change.when = now();
+		rec->data.effective_priority_change.inh_pid = (inh != NULL) ?
+			inh->pid :
+			0xffff;
+
+		put_record(rec);
+	}
+}
+
+#if 0
+/* pray for no nesting of nv interrupts on same CPU... */
+struct tracing_interrupt_map
+{
+	int active;
+	int count;
+	unsigned long data[128]; // assume nesting less than 128...
+	unsigned long serial[128];
+};
+DEFINE_PER_CPU(struct tracing_interrupt_map, active_interrupt_tracing);
+
+
+DEFINE_PER_CPU(u32, intCounter);
+
+feather_callback void do_sched_trace_nv_interrupt_begin(unsigned long id,
+				unsigned long _device)
+{
+	struct st_event_record *rec;
+	u32 serialNum;
+
+	{
+		u32* serial;
+		struct tracing_interrupt_map* int_map = &per_cpu(active_interrupt_tracing, smp_processor_id());
+		if(!int_map->active == 0xcafebabe)
+		{
+			int_map->count++;
+		}
+		else
+		{
+			int_map->active = 0xcafebabe;
+			int_map->count = 1;
+		}
+		//int_map->data[int_map->count-1] = _device;
+
+		serial = &per_cpu(intCounter, smp_processor_id());
+		*serial += num_online_cpus();
+		serialNum = *serial;
+		int_map->serial[int_map->count-1] = serialNum;
+	}
+
+	rec = get_record(ST_NV_INTERRUPT_BEGIN, NULL);
+	if(rec) {
+		u32 device = _device;
+		rec->data.nv_interrupt_begin.when = now();
+		rec->data.nv_interrupt_begin.device = device;
+		rec->data.nv_interrupt_begin.serialNumber = serialNum;
+		put_record(rec);
+	}
+}
+EXPORT_SYMBOL(do_sched_trace_nv_interrupt_begin);
+
+/*
+int is_interrupt_tracing_active(void)
+{
+	struct tracing_interrupt_map* int_map = &per_cpu(active_interrupt_tracing, smp_processor_id());
+	if(int_map->active == 0xcafebabe)
+		return 1;
+	return 0;
+}
+*/
+
+feather_callback void do_sched_trace_nv_interrupt_end(unsigned long id, unsigned long _device)
+{
+	struct tracing_interrupt_map* int_map = &per_cpu(active_interrupt_tracing, smp_processor_id());
+	if(int_map->active == 0xcafebabe)
+	{
+		struct st_event_record *rec = get_record(ST_NV_INTERRUPT_END, NULL);
+
+		int_map->count--;
+		if(int_map->count == 0)
+			int_map->active = 0;
+
+		if(rec) {
+			u32 device = _device;
+			rec->data.nv_interrupt_end.when = now();
+			//rec->data.nv_interrupt_end.device = int_map->data[int_map->count];
+			rec->data.nv_interrupt_end.device = device;
+			rec->data.nv_interrupt_end.serialNumber = int_map->serial[int_map->count];
+			put_record(rec);
+		}
+	}
+}
+EXPORT_SYMBOL(do_sched_trace_nv_interrupt_end);
+#endif

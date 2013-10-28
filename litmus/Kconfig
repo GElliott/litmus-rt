@@ -3,38 +3,78 @@ menu "LITMUS^RT"
 menu "Scheduling"
 
 config PLUGIN_CEDF
-        bool "Clustered-EDF"
+	bool "Clustered-EDF"
 	depends on X86 && SYSFS
-        default y
-        help
-          Include the Clustered EDF (C-EDF) plugin in the kernel.
-          This is appropriate for large platforms with shared caches.
-          On smaller platforms (e.g., ARM PB11MPCore), using C-EDF
-          makes little sense since there aren't any shared caches.
+	default y
+	help
+		Include the Clustered EDF (C-EDF) plugin in the kernel.
+		This is appropriate for large platforms with shared caches.
+		On smaller platforms (e.g., ARM PB11MPCore), using C-EDF
+		makes little sense since there aren't any shared caches.
+
+config RECURSIVE_READYQ_LOCK
+	bool "Recursive Ready Queue Lock"
+	default n
+	help
+		Protects ready queues with a raw recursive spinlock instead
+		of a normal raw spinlock. Adds small overhead to locking
+		operations.
+
+		If unsure, say No.
 
 config PLUGIN_PFAIR
 	bool "PFAIR"
 	depends on HIGH_RES_TIMERS && HZ_PERIODIC && HZ = "1000"
 	default y
 	help
-	  Include the PFAIR plugin (i.e., the PD^2 scheduler) in the kernel.
-	  The PFAIR plugin requires high resolution timers (for staggered
-	  quanta) and also requires HZ_PERIODIC (i.e., periodic timer ticks
-	  even if a processor is idle, as quanta could be missed otherwise).
-	  Further, the PFAIR plugin uses the system tick and thus requires
-	  HZ=1000 to achive reasonable granularity.
+		Include the PFAIR plugin (i.e., the PD^2 scheduler) in the kernel.
+		The PFAIR plugin requires high resolution timers (for staggered
+		quanta) and also requires HZ_PERIODIC (i.e., periodic timer ticks
+		even if a processor is idle, as quanta could be missed otherwise).
+		Further, the PFAIR plugin uses the system tick and thus requires
+		HZ=1000 to achive reasonable granularity.
 
-	  If unsure, say Yes.
+		If unsure, say Yes.
 
 config RELEASE_MASTER
-        bool "Release-master Support"
+	bool "Release-master Support"
 	depends on ARCH_HAS_SEND_PULL_TIMERS && SMP
 	default n
 	help
-           Allow one processor to act as a dedicated interrupt processor
-           that services all timer interrupts, but that does not schedule
-           real-time tasks. See RTSS'09 paper for details
-	   (http://www.cs.unc.edu/~anderson/papers.html).
+		Allow one processor to act as a dedicated interrupt processor
+		that services all timer interrupts, but that does not schedule
+		real-time tasks. See RTSS'09 paper for details
+		(http://www.cs.unc.edu/~anderson/papers.html).
+
+config REALTIME_AUX_TASKS
+	bool "Real-Time Auxillary Tasks"
+	depends on LITMUS_LOCKING
+	default n
+	help
+		Adds a system call that forces all non-real-time threads in a process
+		to become auxillary real-time tasks. These tasks inherit the priority of
+		the highest-prio *BLOCKED* (but NOT blocked on a Litmus lock) real-time
+		task (non-auxillary) in the process. This allows the integration of COTS
+		code that has background helper threads used primarily for message
+		passing and synchronization. If these background threads are NOT real-
+		time scheduled, then unbounded priority inversions may occur if a real-
+		time task blocks on a non-real-time thread.
+
+		Beware of the following pitfalls:
+			1) Auxillary threads should not be CPU intensive. They should mostly
+			   block on mutexes and condition variables. Violating this will
+			   likely prevent meaningful analysis.
+			2) Since there may be more than one auxillary thread per process,
+			   priority inversions may occur with respect to single-threaded
+			   task models if/when one of threads are scheduled simultanously
+			   with another of the same identity.
+
+choice
+	prompt "Scheduling prioritization of AUX tasks."
+	depends on REALTIME_AUX_TASKS
+	default REALTIME_AUX_TASK_PRIORITY_INHERITANCE
+	help
+		Select the prioritization method for auxillary tasks.
 
 config PREFER_LOCAL_LINKING
        bool "Link newly arrived tasks locally if possible"
@@ -54,54 +94,126 @@ config PREFER_LOCAL_LINKING
 
 	  If unsure, say yes.
 
+config REALTIME_AUX_TASK_PRIORITY_BOOSTED
+	bool "Boosted"
+	help
+		Run all auxillary task threads at a maximum priority. Useful for
+		temporarily working around bugs during development.
+
+		BEWARE: Run-away auxillary tasks will clobber CPUs.
+
+config REALTIME_AUX_TASK_PRIORITY_INHERITANCE
+	bool "Inheritance"
+	help
+		Auxillary tasks inherit the maximum priority from blocked real-time
+		threads within the same process.
+
+		Additional pitfall (cont. from REALTIME_AUX_TASKS pitfalls):
+			3) Busy-wait deadlock is likely between normal real-time tasks and
+			   auxillary tasks synchronize using _preemptive_ spinlocks that do
+			   not use priority inheritance.
+
+		These pitfalls are mitgated by the fact that auxillary tasks only
+		inherit priorities from blocked tasks (Blocking signifies that the
+		blocked task _may_ be waiting on an auxillary task to perform some
+		work.). Futher, auxillary tasks without an inherited priority are
+		_always_ scheduled with a priority less than any normal real-time task!!
+
+		NOTE: Aux tasks do not _directly_ inherit a priority from rt tasks that
+		are blocked on Litmus locks. Aux task should be COTS code that know
+		nothing of Litmus, so they won't hold Litmus locks. Nothing the aux task
+		can do can _directly_ unblock the rt task blocked on a Litmus lock.
+		However, the lock holder that blocks the rt task CAN block on I/O and
+		contribute its priority to the aux tasks. Aux tasks may still
+		_indirectly_ inherit the priority of the blocked rt task via the lock
+		holder.
+endchoice
 
 config BUG_ON_MIGRATION_DEADLOCK
-       bool "Panic on suspected migration deadlock"
-       default y
-       help
-          This is a debugging option. The LITMUS^RT migration support code for
-	  global scheduling contains a simple heuristic to detect when the
-	  system deadlocks due to circular stack dependencies.
+	bool "Panic on suspected migration deadlock"
+	default y
+	help
+		This is a debugging option. The LITMUS^RT migration support code for
+		global scheduling contains a simple heuristic to detect when the
+		system deadlocks due to circular stack dependencies.
 
-	  For example, such a deadlock exists if CPU 0 waits for task A's stack
-	  to become available while using task B's stack, and CPU 1 waits for
-	  task B's stack to become available while using task A's stack. Such
-	  a situation can arise in (buggy) global scheduling plugins.
+		For example, such a deadlock exists if CPU 0 waits for task A's stack
+		to become available while using task B's stack, and CPU 1 waits for
+		task B's stack to become available while using task A's stack. Such
+		a situation can arise in (buggy) global scheduling plugins.
 
-	  With this option enabled, such a scenario with result in a BUG().
-	  You can turn off this option when debugging on real hardware (e.g.,
-	  to rescue traces, etc. that would be hard to get after a panic).
+		With this option enabled, such a scenario with result in a BUG().
+		You can turn off this option when debugging on real hardware (e.g.,
+		to rescue traces, etc. that would be hard to get after a panic).
 
-	  Only turn this off if you really know what you are doing. If this
-	  BUG() triggers, the scheduler is broken and turning off this option
-	  won't fix it.
-
+		Only turn this off if you really know what you are doing. If this
+		BUG() triggers, the scheduler is broken and turning off this option
+		won't fix it.
 
 endmenu
+
 
 menu "Real-Time Synchronization"
 
 config NP_SECTION
-        bool "Non-preemptive section support"
+	bool "Non-preemptive section support"
 	default y
 	help
-	  Allow tasks to become non-preemptable.
-          Note that plugins still need to explicitly support non-preemptivity.
-          Currently, only the GSN-EDF, PSN-EDF, and P-FP plugins have such support.
+		Allow tasks to become non-preemptable.
+		Note that plugins still need to explicitly support non-preemptivity.
+		Currently, only the GSN-EDF, PSN-EDF, and P-FP plugins have such
+		support.
 
-	  This is required to support locking protocols such as the FMLP.
-	  If disabled, all tasks will be considered preemptable at all times.
+		This is required to support locking protocols such as the FMLP.
+		If disabled, all tasks will be considered preemptable at all times.
 
 config LITMUS_LOCKING
-        bool "Support for real-time locking protocols"
+	bool "Support for real-time locking protocols"
 	depends on NP_SECTION
 	default y
 	help
-	  Enable LITMUS^RT's multiprocessor real-time locking protocols with
-	  predicable maximum blocking times.
+		Enable LITMUS^RT's multiprocessor real-time locking protocols with
+		predicable maximum blocking times.
 
-	  Say Yes if you want to include locking protocols such as the FMLP and
-	  Baker's SRP.
+		Say Yes if you want to include locking protocols such as the FMLP and
+		Baker's SRP.
+
+config LITMUS_AFFINITY_LOCKING
+	bool "Enable affinity infrastructure in k-exclusion locking protocols."
+	depends on LITMUS_LOCKING
+	default n
+	help
+	 	Enable affinity tracking infrastructure in k-exclusion locking
+		protocols. This only enabled the *infrastructure* not actual affinity
+		algorithms.
+
+		If unsure, say No.
+
+config LITMUS_NESTED_LOCKING
+	bool "Support for nested inheritance in locking protocols"
+	depends on LITMUS_LOCKING
+	default n
+	help
+		Enable nested priority inheritance.
+
+config LITMUS_DGL_SUPPORT
+	bool "Support for dynamic group locks"
+	depends on LITMUS_NESTED_LOCKING
+	default n
+	help
+		Enable dynamic group lock support.
+
+config LITMUS_MAX_DGL_SIZE
+	int "Maximum size of a dynamic group lock."
+	depends on LITMUS_DGL_SUPPORT
+	range 1 128
+	default "10"
+	help
+		Dynamic group lock data structures are allocated on the process
+		stack when a group is requested. We set a maximum size of
+		locks in a dynamic group lock to avoid dynamic allocation.
+
+		TODO: Batch DGL requests exceeding LITMUS_MAX_DGL_SIZE.
 
 endmenu
 
@@ -112,82 +224,82 @@ config SCHED_CPU_AFFINITY
 	depends on X86 && SYSFS
 	default y
 	help
-	  Rescheduled tasks prefer CPUs near to their previously used CPU.
-	  This may improve cache performance through possible preservation of
-	  cache affinity, at the expense of (slightly) more involved scheduling
-	  logic.
+		Rescheduled tasks prefer CPUs near to their previously used CPU. This
+		may improve cache performance through possible preservation of cache
+		affinity, at the expense of (slightly) more involved scheduling logic.
 
-	  Warning: May make bugs harder to find since tasks may migrate less often.
+		Warning: May make bugs harder to find since tasks may migrate less
+		often.
 
-	  NOTES:
+		NOTES:
 		* Feature is not utilized by PFair/PD^2.
 
-	  Say Yes if unsure.
+		Say Yes if unsure.
 
 config ALLOW_EARLY_RELEASE
 	bool "Allow Early Releasing"
 	default y
 	help
-	  Allow tasks to release jobs early (while still maintaining job
-	  precedence constraints). Only supported by EDF schedulers. Early
-	  releasing must be explicitly requested by real-time tasks via
-	  the task_params passed to sys_set_task_rt_param().
+		Allow tasks to release jobs early (while still maintaining job
+		precedence constraints). Only supported by EDF schedulers. Early
+		releasing must be explicitly requested by real-time tasks via
+		the task_params passed to sys_set_task_rt_param().
 
-	  Early releasing can improve job response times while maintaining
-	  real-time correctness. However, it can easily peg your CPUs
-	  since tasks never suspend to wait for their next job. As such, early
-	  releasing is really only useful in the context of implementing
-	  bandwidth servers, interrupt handling threads, or short-lived
-	  computations.
+		Early releasing can improve job response times while maintaining
+		real-time correctness. However, it can easily peg your CPUs
+		since tasks never suspend to wait for their next job. As such, early
+		releasing is really only useful in the context of implementing
+		bandwidth servers, interrupt handling threads, or short-lived
+		computations.
 
-	  Beware that early releasing may affect real-time analysis
-	  if using locking protocols or I/O.
+		Beware that early releasing may affect real-time analysis
+		if using locking protocols or I/O.
 
-	  Say Yes if unsure.
+		Say Yes if unsure.
 
 choice
 	prompt "EDF Tie-Break Behavior"
 	default EDF_TIE_BREAK_LATENESS_NORM
 	help
-	  Allows the configuration of tie-breaking behavior when the deadlines
-	  of two EDF-scheduled tasks are equal.
+		Allows the configuration of tie-breaking behavior when the deadlines
+		of two EDF-scheduled tasks are equal.
 
 	config EDF_TIE_BREAK_LATENESS
 	bool "Lateness-based Tie Break"
 	help
-	  Break ties between two jobs, A and B, based upon the lateness of their
-	  prior jobs. The job with the greatest lateness has priority. Note that
-	  lateness has a negative value if the prior job finished before its
-	  deadline.
+		Break ties between two jobs, A and B, based upon the lateness of their
+		prior jobs. The job with the greatest lateness has priority. Note that
+		lateness has a negative value if the prior job finished before its
+		deadline.
 
 	config EDF_TIE_BREAK_LATENESS_NORM
 	bool "Normalized Lateness-based Tie Break"
 	help
-	  Break ties between two jobs, A and B, based upon the lateness, normalized
-	  by relative deadline, of their prior jobs. The job with the greatest
-	  normalized lateness has priority. Note that lateness has a negative value
-	  if the prior job finished before its deadline.
+		Break ties between two jobs, A and B, based upon the lateness,
+		normalized by relative deadline, of their prior jobs. The job with the
+		greatest normalized lateness has priority. Note that lateness has a
+		negative value if the prior job finished before its deadline.
 
-	  Normalized lateness tie-breaks are likely desireable over non-normalized
-	  tie-breaks if the execution times and/or relative deadlines of tasks in a
-	  task set vary greatly.
+		Normalized lateness tie-breaks are likely desireable over non-normalized
+		tie-breaks if the execution times and/or relative deadlines of tasks
+		in a task set vary greatly.
 
 	config EDF_TIE_BREAK_HASH
 	bool "Hash-based Tie Breaks"
 	help
-	  Break ties between two jobs, A and B, with equal deadlines by using a
-	  uniform hash; i.e.: hash(A.pid, A.job_num) < hash(B.pid, B.job_num). Job
-	  A has ~50% of winning a given tie-break.
+		Break ties between two jobs, A and B, with equal deadlines by using a
+		uniform hash; i.e.: hash(A.pid, A.job_num) < hash(B.pid, B.job_num). Job
+		A has ~50% of winning a given tie-break.
 
 	config EDF_PID_TIE_BREAK
 	bool "PID-based Tie Breaks"
 	help
-	  Break ties based upon OS-assigned thread IDs. Use this option if
-	  required by algorithm's real-time analysis or per-task response-time
-	  jitter must be minimized.
+		Break ties based upon OS-assigned thread IDs. Use this option if
+		required by algorithm's real-time analysis or per-task response-time
+		jitter must be minimized.
 
-	  NOTES:
-	    * This tie-breaking method was default in Litmus 2012.2 and before.
+		NOTES:
+		* This tie-breaking method was default in Litmus 2012.2 and before.
 
 endchoice
 
@@ -200,166 +312,327 @@ config FEATHER_TRACE
 	depends on !RELOCATABLE
 	default y
 	help
-	  Feather-Trace basic tracing infrastructure. Includes device file
-	  driver and instrumentation point support.
+		Feather-Trace basic tracing infrastructure. Includes device file
+		driver and instrumentation point support.
 
-	  There are actually two implementations of Feather-Trace.
-	  1) A slower, but portable, default implementation.
-	  2) Architecture-specific implementations that rewrite kernel .text at runtime.
+		There are actually two implementations of Feather-Trace.
+		1) A slower, but portable, default implementation.
+		2) Architecture-specific implementations that rewrite kernel .text at
+		   runtime.
 
-	  If enabled, Feather-Trace will be based on 2) if available (currently only for x86).
-	  However, if DEBUG_RODATA=y, then Feather-Trace will choose option 1) in any case
-	  to avoid problems with write-protected .text pages.
+		If enabled, Feather-Trace will be based on 2) if available (currently
+		only for x86). However, if DEBUG_RODATA=y, then Feather-Trace will
+		choose option 1) in any case to avoid problems with write-protected
+		.text pages.
 
-	  Bottom line: to avoid increased overheads, choose DEBUG_RODATA=n.
+		Bottom line: to avoid increased overheads, choose DEBUG_RODATA=n.
 
-	  Note that this option only enables the basic Feather-Trace infrastructure;
-	  you still need to enable SCHED_TASK_TRACE and/or SCHED_OVERHEAD_TRACE to
-	  actually enable any events.
+		Note that this option only enables the basic Feather-Trace
+		infrastructure; you still need to enable SCHED_TASK_TRACE and/or
+		SCHED_OVERHEAD_TRACE to actually enable any events.
 
 config SCHED_TASK_TRACE
 	bool "Trace real-time tasks"
 	depends on FEATHER_TRACE
 	default y
 	help
-	  Include support for the sched_trace_XXX() tracing functions. This
-          allows the collection of real-time task events such as job
-	  completions, job releases, early completions, etc. This results in  a
-	  small overhead in the scheduling code. Disable if the overhead is not
-	  acceptable (e.g., benchmarking).
+		Include support for the sched_trace_XXX() tracing functions. This
+		allows the collection of real-time task events such as job
+		completions, job releases, early completions, etc. This results in a
+		small overhead in the scheduling code. Disable if the overhead is not
+		acceptable (e.g., benchmarking).
 
-	  Say Yes for debugging.
-	  Say No for overhead tracing.
+		Say Yes for debugging.
+		Say No for overhead tracing.
 
 config SCHED_TASK_TRACE_SHIFT
-       int "Buffer size for sched_trace_xxx() events"
-       depends on SCHED_TASK_TRACE
-       range 8 13
-       default 9
-       help
+	int "Buffer size for sched_trace_xxx() events"
+	depends on SCHED_TASK_TRACE
+	range 8 13
+	default 9
+	help
+		Select the buffer size of sched_trace_xxx() events as a power of two.
+		These buffers are statically allocated as per-CPU data. Each event
+		requires 24 bytes storage plus one additional flag byte. Too large
+		buffers can cause issues with the per-cpu allocator (and waste
+		memory). Too small buffers can cause scheduling events to be lost. The
+		"right" size is workload dependent and depends on the number of tasks,
+		each task's period, each task's number of suspensions, and how often
+		the buffer is flushed.
 
-         Select the buffer size of sched_trace_xxx() events as a power of two.
-	 These buffers are statically allocated as per-CPU data. Each event
-	 requires 24 bytes storage plus one additional flag byte. Too large
-	 buffers can cause issues with the per-cpu allocator (and waste
-	 memory). Too small buffers can cause scheduling events to be lost. The
-	 "right" size is workload dependent and depends on the number of tasks,
-	 each task's period, each task's number of suspensions, and how often
-	 the buffer is flushed.
-
-	 Examples: 12 =>   4k events
-		   10 =>   1k events
-		    8 =>  512 events
+	 	Examples:	12	=>	4k events
+					10	=>	1k events
+					8	=>	512 events
 
 config SCHED_LITMUS_TRACEPOINT
 	bool "Enable Event/Tracepoint Tracing for real-time task tracing"
 	depends on TRACEPOINTS
 	default n
 	help
-	  Enable kernel-style events (tracepoint) for Litmus. Litmus events
-	  trace the same functions as the above sched_trace_XXX(), but can
-	  be enabled independently.
-	  Litmus tracepoints can be recorded and analyzed together (single
-	  time reference) with all other kernel tracing events (e.g.,
-	  sched:sched_switch, etc.).
+		Enable kernel-style events (tracepoint) for Litmus. Litmus events
+		trace the same functions as the above sched_trace_XXX(), but can
+		be enabled independently.
+		Litmus tracepoints can be recorded and analyzed together (single
+		time reference) with all other kernel tracing events (e.g.,
+		sched:sched_switch, etc.).
 
-	  This also enables a quick way to visualize schedule traces using
-	  trace-cmd utility and kernelshark visualizer.
+		This also enables a quick way to visualize schedule traces using
+		trace-cmd utility and kernelshark visualizer.
 
-	  Say Yes for debugging and visualization purposes.
-	  Say No for overhead tracing.
+		Say Yes for debugging and visualization purposes.
+		Say No for overhead tracing.
 
 config SCHED_OVERHEAD_TRACE
 	bool "Record timestamps for overhead measurements"
 	depends on FEATHER_TRACE
 	default y
 	help
-	  Export event stream for overhead tracing.
-	  Say Yes for overhead tracing.
+		Export event stream for overhead tracing.
+		Say Yes for overhead tracing.
 
 config SCHED_OVERHEAD_TRACE_SHIFT
-       int "Buffer size for Feather-Trace overhead data"
-       depends on SCHED_OVERHEAD_TRACE
-       range 15 32
-       default 22
-       help
+	int "Buffer size for Feather-Trace overhead data"
+	depends on SCHED_OVERHEAD_TRACE
+	range 15 32
+	default 22
+	help
+		Select the buffer size for the Feather-Trace overhead tracing
+		infrastructure (/dev/litmus/ft_trace0 & ftcat) as a power of two. The
+		larger the buffer, the less likely the chance of buffer overflows if
+		the ftcat process is starved by real-time activity. In machines with
+		large memories, large buffer sizes are recommended.
 
-         Select the buffer size for the Feather-Trace overhead tracing
-         infrastructure (/dev/litmus/ft_trace0 & ftcat) as a power of two.  The
-         larger the buffer, the less likely the chance of buffer overflows if
-         the ftcat process is starved by real-time activity. In machines with
-         large memories, large buffer sizes are recommended.
-
-	 Examples: 16 =>   2 MB
-		   24 => 512 MB
-		   26 =>  2G MB
+		Examples:	16 =>	2 MB
+					24 => 512 MB
+					26 =>  2G MB
 
 config SCHED_DEBUG_TRACE
 	bool "TRACE() debugging"
 	default n
 	help
-	  Include support for sched_trace_log_messageg(), which is used to
-	  implement TRACE(). If disabled, no TRACE() messages will be included
-	  in the kernel, and no overheads due to debugging statements will be
-	  incurred by the scheduler. Disable if the overhead is not acceptable
-	  (e.g. benchmarking).
+		Include support for sched_trace_log_messageg(), which is used to
+		implement TRACE(). If disabled, no TRACE() messages will be included
+		in the kernel, and no overheads due to debugging statements will be
+		incurred by the scheduler. Disable if the overhead is not acceptable
+		(e.g. benchmarking).
 
-	  Say Yes for debugging.
-	  Say No for overhead tracing.
+		Say Yes for debugging.
+		Say No for overhead tracing.
 
 config SCHED_DEBUG_TRACE_SHIFT
-       int "Buffer size for TRACE() buffer"
-       depends on SCHED_DEBUG_TRACE
-       range 14 22
-       default 18
-       help
+	int "Buffer size for TRACE() buffer"
+	depends on SCHED_DEBUG_TRACE
+	range 14 22
+	default 18
+	help
+		Select the amount of memory needed per for the TRACE() buffer, as a
+		power of two. The TRACE() buffer is global and statically allocated. If
+		the buffer is too small, there will be holes in the TRACE() log if the
+		buffer-flushing task is starved.
 
-	Select the amount of memory needed per for the TRACE() buffer, as a
-	power of two. The TRACE() buffer is global and statically allocated. If
-	the buffer is too small, there will be holes in the TRACE() log if the
-	buffer-flushing task is starved.
+		The default should be sufficient for most systems. Increase the buffer
+		size if the log contains holes. Reduce the buffer size when running on
+		a memory-constrained system.
 
-	The default should be sufficient for most systems. Increase the buffer
-	size if the log contains holes. Reduce the buffer size when running on
-	a memory-constrained system.
+		Examples:	14 =>  16KB
+					18 => 256KB
+					20 =>   1MB
 
-	Examples: 14 =>  16KB
-		  18 => 256KB
-		  20 =>   1MB
-
-        This buffer is exported to usespace using a misc device as
-        'litmus/log'. On a system with default udev rules, a corresponding
-        character device node should be created at /dev/litmus/log. The buffer
-        can be flushed using cat, e.g., 'cat /dev/litmus/log > my_log_file.txt'.
+		This buffer is exported to usespace using a misc device as
+		'litmus/log'. On a system with default udev rules, a corresponding
+		character device node should be created at /dev/litmus/log. The buffer
+		can be flushed using cat, e.g., 'cat /dev/litmus/log > my_log_file.txt'.
 
 config SCHED_DEBUG_TRACE_CALLER
-       bool "Include [function@file:line] tag in TRACE() log"
-       depends on SCHED_DEBUG_TRACE
-       default n
-       help
-         With this option enabled, TRACE() prepends
+	bool "Include [function@file:line] tag in TRACE() log"
+	depends on SCHED_DEBUG_TRACE
+	default n
+	help
+		With this option enabled, TRACE() prepends
 
-	      "[<function name>@<filename>:<line number>]"
+			"[<function name>@<filename>:<line number>]"
 
-	 to each message in the debug log. Enable this to aid in figuring out
-         what was called in which order. The downside is that it adds a lot of
-         clutter.
+		to each message in the debug log. Enable this to aid in figuring out
+		what was called in which order. The downside is that it adds a lot of
+		clutter.
 
-	 If unsure, say No.
+		If unsure, say No.
 
 config PREEMPT_STATE_TRACE
-       bool "Trace preemption state machine transitions"
-       depends on SCHED_DEBUG_TRACE && DEBUG_KERNEL
-       default n
-       help
-         With this option enabled, each CPU will log when it transitions
-	 states in the preemption state machine. This state machine is
-	 used to determine how to react to IPIs (avoid races with in-flight IPIs).
+	bool "Trace preemption state machine transitions"
+	depends on SCHED_DEBUG_TRACE && DEBUG_KERNEL
+	default n
+	help
+		With this option enabled, each CPU will log when it transitions
+		states in the preemption state machine. This state machine is
+		used to determine how to react to IPIs (avoid races with in-flight
+		IPIs).
 
-	 Warning: this creates a lot of information in the debug trace. Only
-	 recommended when you are debugging preemption-related races.
+		Warning: this creates a lot of information in the debug trace. Only
+		recommended when you are debugging preemption-related races.
 
-	 If unsure, say No.
+		If unsure, say No.
+
+endmenu
+
+
+menu "Interrupt Handling"
+
+choice
+	prompt "Scheduling of interrupt bottom-halves in Litmus."
+	default LITMUS_SOFTIRQD_NONE
+	depends on LITMUS_LOCKING
+	help
+		Schedule tasklets with known priorities in Litmus.
+
+config LITMUS_SOFTIRQD_NONE
+	bool "Linux tasklet/workqueue scheduling."
+	help
+		Don't schedule tasklets in Litmus. Default.
+
+config LITMUS_SOFTIRQD
+	bool "klmirqd real-time handling."
+	help
+		Create klmirqd interrupt handling threads. Work must be
+		specifically dispatched to these workers. (Softirqs for
+		Litmus tasks are not magically redirected to klmirqd.)
+
+		C-EDF ONLY for now!
+
+endchoice
+
+config LITMUS_NVIDIA
+	bool "Litmus handling of NVIDIA driver."
+	default n
+	help
+		Enable Litmus control of NVIDIA driver tasklet/workqueues.
+
+		If unsure, say No.
+
+config LITMUS_NVIDIA_NONSPLIT_INTERRUPTS
+	bool "Execute NVIDIA interrupts with top-halves."
+	depends on LITMUS_NVIDIA
+	default n
+	help
+		Tasklets orginating from the NVIDIA driver are executed
+		immediatly in interrupt-space. This implements non-split
+		interrupt handling for GPUs. Feature intended mainly for
+		debugging, as it allows one to avoid having to rely
+		upon PAI or klmirqd interrupt handling.
+
+		If unsure, say No.
+
+choice
+	prompt "Litmus handling of NVIDIA workqueues."
+	depends on LITMUS_NVIDIA
+	default LITMUS_NVIDIA_WORKQ_OFF
+	help
+		Select method for handling NVIDIA workqueues.
+
+config LITMUS_NVIDIA_WORKQ_OFF
+	bool "Use Linux's default work queues."
+	help
+		Let Linux process all NVIDIA work queue items.
+
+config LITMUS_NVIDIA_WORKQ_ON
+	bool "Schedule work with interrupt thread."
+	depends on LITMUS_SOFTIRQD
+	help
+		Direct work queue items from NVIDIA devices Litmus's
+		klmirqd handling routines. Use the same thread
+		as interrupt handling.
+
+config LITMUS_NVIDIA_WORKQ_ON_DEDICATED
+	bool "Sechedule work in dedicated threads."
+	depends on LITMUS_SOFTIRQD
+	help
+		Direct work queue items from NVIDIA devices to Litmus's
+		klmirqd handling routines. Use dedicated thread for
+		work (seperate thread from interrupt handling).
+
+endchoice
+
+config LITMUS_AFFINITY_AWARE_GPU_ASSINGMENT
+	bool "Enable affinity-aware heuristics to improve GPU assignment."
+	depends on LITMUS_NVIDIA && LITMUS_AFFINITY_LOCKING
+	default n
+	help
+		Enable several heuristics to improve the assignment
+		of GPUs to real-time tasks to reduce the overheads
+		of memory migrations.
+
+		If unsure, say No.
+
+config NV_DEVICE_NUM
+	int "Number of NVIDIA GPUs."
+	depends on LITMUS_NVIDIA
+	range 1 16
+	default "1"
+	help
+		Should be (<= to the number of CPUs) and
+		(<= to the number of GPUs) in your system.
+
+choice
+	prompt "CUDA/Driver Version Support"
+	default NV_DRV_319_37
+	depends on LITMUS_NVIDIA
+	help
+		Select the version of NVIDIA driver to support.
+		Note: Some of the configurations below may work
+		with other versions of the NVIDIA driver, but
+		the layouts of data structures in litmus/nvidia_info.c
+		will have to be manually compared against
+		<driver>/kernel/nv.h and nv-linux.h in the driver's
+		GPL shim layer.
+
+config NV_DRV_331_13
+	bool "331.13 (post-CUDA 5.5)"
+	depends on LITMUS_NVIDIA && REALTIME_AUX_TASKS
+	help
+		NV Driver 331.13. (An updated driver released
+		after CUDA 5.5.)
+
+config NV_DRV_325_15
+	bool "325.15 (post-CUDA 5.5)"
+	depends on LITMUS_NVIDIA && REALTIME_AUX_TASKS
+	help
+		NV Driver 325.15. (An updated driver released
+		after CUDA 5.5.)
+
+config NV_DRV_319_37
+	bool "319.37 (CUDA 5.5)"
+	depends on LITMUS_NVIDIA && REALTIME_AUX_TASKS
+	help
+		NV Driver 319.37. (distributed with CUDA 5.5)
+
+config NV_DRV_304_54
+	bool "304.54 (CUDA 5.0)"
+	depends on LITMUS_NVIDIA && REALTIME_AUX_TASKS
+	help
+		NV Driver 304.54. (distributed with CUDA 5.0)
+
+config NV_DRV_295_40
+	bool "295.40 (CUDA 4.2)"
+	depends on LITMUS_NVIDIA
+	help
+		NV Driver 295.40. (distributed with CUDA 4.2)
+
+config NV_DRV_270_41
+	bool "270.41 (CUDA 4.0)"
+	depends on LITMUS_NVIDIA
+	help
+		NV Driver 270.41. (distributed with CUDA 4.0)
+
+endchoice
+
+config LITMUS_NV_KLMIRQD_DEBUG
+	bool "Raise fake sporadic tasklets to test nv klimirqd threads."
+	depends on LITMUS_NVIDIA && LITMUS_SOFTIRQD
+	default n
+	help
+		Causes tasklets to be sporadically dispatched to waiting klmirqd
+		threads. WARNING! Kernel panic may occur if you switch between
+		LITMUS plugins!
 
 endmenu
 

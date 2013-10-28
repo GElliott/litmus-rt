@@ -73,6 +73,9 @@ void litmus_do_exit(struct task_struct *tsk);
 #define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_lateness(t)		(tsk_rt(t)->job_params.lateness)
 
+#define effective_priority(t) ((!(tsk_rt(t)->inh_task)) ? t : tsk_rt(t)->inh_task)
+#define base_priority(t) (t)
+
 /* release policy macros */
 #define is_periodic(t)		(get_release_policy(t) == TASK_PERIODIC)
 #define is_sporadic(t)		(get_release_policy(t) == TASK_SPORADIC)

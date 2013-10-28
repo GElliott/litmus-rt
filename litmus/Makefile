@@ -27,6 +27,8 @@ obj-$(CONFIG_PLUGIN_CEDF) += sched_cedf.o
 obj-$(CONFIG_PLUGIN_PFAIR) += sched_pfair.o
 obj-$(CONFIG_SCHED_CPU_AFFINITY) += affinity.o
 
+ obj-$(CONFIG_LITMUS_NESTED_LOCKING) += fifo_lock.o prioq_lock.o
+
 obj-$(CONFIG_FEATHER_TRACE) += ft_event.o ftdev.o
 obj-$(CONFIG_SCHED_TASK_TRACE) += sched_task_trace.o
 obj-$(CONFIG_SCHED_DEBUG_TRACE) += sched_trace.o

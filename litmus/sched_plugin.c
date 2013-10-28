@@ -122,15 +122,88 @@ static long litmus_dummy_get_domain_proc_info(struct domain_proc_info **d)
 }
 
 #ifdef CONFIG_LITMUS_LOCKING
+static int litmus_dummy_compare(struct task_struct* a, struct task_struct* b)
+{
+	TRACE_CUR("WARNING: Dummy compare function called!\n");
+	return 0;
+}
 
 static long litmus_dummy_allocate_lock(struct litmus_lock **lock, int type,
-				       void* __user config)
+				void* __user config)
 {
 	return -ENXIO;
 }
 
+static void litmus_dummy_increase_prio(struct task_struct* t,
+				struct task_struct* prio_inh)
+{
+}
+
+static void litmus_dummy_decrease_prio(struct task_struct* t,
+				struct task_struct* prio_inh, int budget_triggered)
+{
+}
+
+static int litmus_dummy___increase_prio(struct task_struct* t,
+				struct task_struct* prio_inh)
+{
+	TRACE_CUR("WARNING: Dummy litmus_dummy___increase_prio called!\n");
+	return 0;
+}
+
+static int litmus_dummy___decrease_prio(struct task_struct* t,
+				struct task_struct* prio_inh, int budget_triggered)
+{
+	TRACE_CUR("WARNING: Dummy litmus_dummy___decrease_prio called!\n");
+	return 0;
+}
 #endif
 
+#ifdef CONFIG_LITMUS_NESTED_LOCKING
+static void litmus_dummy_nested_increase_prio(struct task_struct* t,
+				struct task_struct* prio_inh,
+				raw_spinlock_t *to_unlock, unsigned long irqflags)
+{
+}
+
+static void litmus_dummy_nested_decrease_prio(struct task_struct* t,
+				struct task_struct* prio_inh,
+				raw_spinlock_t *to_unlock, unsigned long irqflags,
+				int budget_triggered)
+{
+}
+
+static int litmus_dummy___compare(
+				struct task_struct* a, comparison_mode_t a_mod,
+				struct task_struct* b, comparison_mode_t b_mode)
+{
+	TRACE_CUR("WARNING: Dummy compare function called!\n");
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_LITMUS_DGL_SUPPORT
+static raw_spinlock_t* litmus_dummy_get_dgl_spinlock(struct task_struct *t)
+{
+	return NULL;
+}
+#endif
+
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+static long litmus_dummy_allocate_aff_obs(struct affinity_observer **aff_obs,
+				int type,
+				void* __user config)
+{
+	return -ENXIO;
+}
+#endif
+
+#if defined(CONFIG_LITMUS_NVIDIA) && defined(CONFIG_LITMUS_SOFTIRQD)
+static int litmus_dummy_map_gpu_to_cpu(int gpu)
+{
+	return 0;
+}
+#endif
 
 /* The default scheduler plugin. It doesn't do anything and lets Linux do its
  * job.
@@ -149,7 +222,26 @@ struct sched_plugin linux_sched_plugin = {
 	.deactivate_plugin = litmus_dummy_deactivate_plugin,
 	.get_domain_proc_info = litmus_dummy_get_domain_proc_info,
 #ifdef CONFIG_LITMUS_LOCKING
+	.compare = litmus_dummy_compare,
 	.allocate_lock = litmus_dummy_allocate_lock,
+	.increase_prio = litmus_dummy_increase_prio,
+	.decrease_prio = litmus_dummy_decrease_prio,
+	.__increase_prio = litmus_dummy___increase_prio,
+	.__decrease_prio = litmus_dummy___decrease_prio,
+#endif
+#ifdef CONFIG_LITMUS_NESTED_LOCKING
+	.nested_increase_prio = litmus_dummy_nested_increase_prio,
+	.nested_decrease_prio = litmus_dummy_nested_decrease_prio,
+	.__compare = litmus_dummy___compare,
+#endif
+#ifdef CONFIG_LITMUS_DGL_SUPPORT
+	.get_dgl_spinlock = litmus_dummy_get_dgl_spinlock,
+#endif
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+	.allocate_aff_obs = litmus_dummy_allocate_aff_obs,
+#endif
+#if defined(CONFIG_LITMUS_NVIDIA) && defined(CONFIG_LITMUS_SOFTIRQD)
+	.map_gpu_to_cpu = litmus_dummy_map_gpu_to_cpu,
 #endif
 	.admit_task = litmus_dummy_admit_task
 };
@@ -189,7 +281,26 @@ int register_sched_plugin(struct sched_plugin* plugin)
 	CHECK(deactivate_plugin);
 	CHECK(get_domain_proc_info);
 #ifdef CONFIG_LITMUS_LOCKING
+	CHECK(compare);
 	CHECK(allocate_lock);
+	CHECK(increase_prio);
+	CHECK(decrease_prio);
+	CHECK(__increase_prio);
+	CHECK(__decrease_prio);
+#endif
+#ifdef CONFIG_LITMUS_NESTED_LOCKING
+	CHECK(nested_increase_prio);
+	CHECK(nested_decrease_prio);
+	CHECK(__compare);
+#endif
+#ifdef CONFIG_LITMUS_DGL_SUPPORT
+	CHECK(get_dgl_spinlock);
+#endif
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+	CHECK(allocate_aff_obs);
+#endif
+#if defined(CONFIG_LITMUS_NVIDIA) && defined(CONFIG_LITMUS_SOFTIRQD)
+	CHECK(map_gpu_to_cpu);
 #endif
 	CHECK(admit_task);
 

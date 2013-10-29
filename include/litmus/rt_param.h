@@ -93,6 +93,11 @@ union np_flag {
 	} np;
 };
 
+struct affinity_observer_args
+{
+	int lock_od;
+};
+
 /* The definition of the data that is shared between the kernel and real-time
  * tasks via a shared page (see litmus/ctrldev.c).
  *

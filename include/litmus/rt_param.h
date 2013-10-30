@@ -98,6 +98,18 @@ struct affinity_observer_args
 	int lock_od;
 };
 
+#define IKGLP_M_IN_FIFOS (0u)
+#define IKGLP_UNLIMITED_IN_FIFOS (~0u)
+#define IKGLP_OPTIMAL_FIFO_LEN (0u)
+#define IKGLP_UNLIMITED_FIFO_LEN (~0u)
+
+struct ikglp_args
+{
+	unsigned int nr_replicas;
+	unsigned int max_in_fifos;
+	unsigned int max_fifo_len;
+};
+
 /* The definition of the data that is shared between the kernel and real-time
  * tasks via a shared page (see litmus/ctrldev.c).
  *

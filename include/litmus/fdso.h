@@ -15,7 +15,7 @@
 #define MAX_OBJECT_DESCRIPTORS 85
 
 typedef enum  {
-	MIN_OBJ_TYPE 	= 0,
+	MIN_OBJ_TYPE	= 0,
 
 	FMLP_SEM	= 0,
 	SRP_SEM		= 1,
@@ -24,25 +24,36 @@ typedef enum  {
 	MPCP_VS_SEM	= 3,
 	DPCP_SEM	= 4,
 
-	PCP_SEM         = 5,
+	PCP_SEM     = 5,
 
-	MAX_OBJ_TYPE	= 5
+	FIFO_MUTEX	= 6,
+	IKGLP_SEM	= 7,
+	KFMLP_SEM	= 8,
+
+	IKGLP_SIMPLE_GPU_AFF_OBS	= 9,
+	IKGLP_GPU_AFF_OBS			= 10,
+	KFMLP_SIMPLE_GPU_AFF_OBS	= 11,
+	KFMLP_GPU_AFF_OBS			= 12,
+
+	PRIOQ_MUTEX = 13,
+
+	MAX_OBJ_TYPE	= 13
 } obj_type_t;
 
 struct inode_obj_id {
 	struct list_head	list;
-	atomic_t		count;
+	atomic_t			count;
 	struct inode*		inode;
 
 	obj_type_t 		type;
 	void*			obj;
-	unsigned int		id;
+	unsigned int	id;
 };
 
 struct fdso_ops;
 
 struct od_table_entry {
-	unsigned int		used;
+	unsigned int			used;
 
 	struct inode_obj_id*	obj;
 	const struct fdso_ops*	class;
@@ -70,8 +81,11 @@ static inline void* od_lookup(int od, obj_type_t type)
 }
 
 #define lookup_fmlp_sem(od)((struct pi_semaphore*)  od_lookup(od, FMLP_SEM))
+#define lookup_kfmlp_sem(od)((struct pi_semaphore*) od_lookup(od, KFMLP_SEM))
 #define lookup_srp_sem(od) ((struct srp_semaphore*) od_lookup(od, SRP_SEM))
 #define lookup_ics(od)     ((struct ics*)           od_lookup(od, ICS_ID))
 
+#define lookup_fifo_mutex(od)((struct litmus_lock*)  od_lookup(od, FIFO_MUTEX))
+#define lookup_prioq_mutex(od)((struct litmus_lock*) od_lookup(od, PRIOQ_MUTEX))
 
 #endif

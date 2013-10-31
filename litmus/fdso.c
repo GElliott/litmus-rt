@@ -20,13 +20,29 @@
 
 extern struct fdso_ops generic_lock_ops;
 
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+extern struct fdso_ops generic_affinity_ops;
+#endif
+
 static const struct fdso_ops* fdso_ops[] = {
 	&generic_lock_ops, /* FMLP_SEM */
 	&generic_lock_ops, /* SRP_SEM */
+
 	&generic_lock_ops, /* MPCP_SEM */
 	&generic_lock_ops, /* MPCP_VS_SEM */
 	&generic_lock_ops, /* DPCP_SEM */
 	&generic_lock_ops, /* PCP_SEM */
+
+	&generic_lock_ops, /* FIFO_MUTEX */
+	&generic_lock_ops, /* IKGLP_SEM */
+	&generic_lock_ops, /* KFMLP_SEM */
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+	&generic_affinity_ops, /* IKGLP_SIMPLE_GPU_AFF_OBS */
+	&generic_affinity_ops, /* IKGLP_GPU_AFF_OBS */
+	&generic_affinity_ops, /* KFMLP_SIMPLE_GPU_AFF_OBS */
+	&generic_affinity_ops, /* KFMLP_GPU_AFF_OBS */
+#endif
+	&generic_lock_ops, /* PRIOQ_MUTEX */
 };
 
 static int fdso_create(void** obj_ref, obj_type_t type, void* __user config)
@@ -113,7 +129,8 @@ static struct inode_obj_id* get_inode_obj(struct inode* inode,
 			return obj;
 		}
 	}
-	printk(KERN_DEBUG "get_inode_obj(%p, %d, %d): couldn't find object\n", inode, type, id);
+	printk(KERN_DEBUG "get_inode_obj(%p, %d, %d): couldn't find object\n",
+					inode, type, id);
 	return NULL;
 }
 

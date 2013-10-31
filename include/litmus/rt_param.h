@@ -98,6 +98,14 @@ struct affinity_observer_args
 	int lock_od;
 };
 
+struct gpu_affinity_observer_args
+{
+	struct affinity_observer_args obs;
+	unsigned int replica_to_gpu_offset;
+	unsigned int rho;
+	int relaxed_rules;
+};
+
 #define IKGLP_M_IN_FIFOS (0u)
 #define IKGLP_UNLIMITED_IN_FIFOS (~0u)
 #define IKGLP_OPTIMAL_FIFO_LEN (0u)
@@ -153,6 +161,40 @@ struct control_page {
 
 #include <linux/semaphore.h>
 #include <litmus/binheap.h>
+
+/*** GPU affinity tracking structures ***/
+
+typedef enum gpu_migration_dist
+{
+	MIG_LOCAL	= 0,
+	MIG_NEAR	= 1,
+	MIG_MED		= 2,
+	MIG_FAR		= 3, /* assumes 8 GPU binary tree hierarchy */
+	MIG_NONE	= 4,
+
+	MIG_LAST = MIG_NONE
+} gpu_migration_dist_t;
+
+#if 0
+typedef struct feedback_est
+{
+	fp_t est;
+	fp_t accum_err;
+} feedback_est_t
+#endif
+
+#define AVG_EST_WINDOW_SIZE 20
+typedef int (*notify_rsrc_exit_t)(struct task_struct* tsk);
+
+typedef struct avg_est {
+	lt_t history[AVG_EST_WINDOW_SIZE];
+	uint16_t count;
+	uint16_t idx;
+	lt_t sum;
+	lt_t avg;
+	lt_t std;
+} avg_est_t;
+
 
 struct _rt_domain;
 struct bheap_node;
@@ -217,16 +259,14 @@ struct rt_param {
 	gpu_migration_dist_t	gpu_migration;
 	int			last_gpu;
 	lt_t			accum_gpu_time;
-	lt_t			gpu_time_stamp
+	lt_t			gpu_time_stamp;
 	unsigned int		suspend_gpu_tracker_on_block:1;
 #endif /* end LITMUS_AFFINITY_LOCKING */
 #endif /* end LITMUS_NVIDIA */
 
-#if 0 /* PORT RECHECK */
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	notify_rsrc_exit_t  rsrc_exit_cb;
-	void* rsrc_exit_cb_args
-#endif
+	void* rsrc_exit_cb_args;
 #endif
 
 #ifdef CONFIG_LITMUS_LOCKING

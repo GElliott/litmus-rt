@@ -1,6 +1,17 @@
+/* litmus/nvidia_info.c - routines for:
+	1) Determining GPU device ID given NVIDIA GPL-layer tasklet data.
+	2) Tracking GPU ownership by task_structs
+	3) Managing klmirqd scheduling priority
+	4) Handling nvidia tasklets and work_structs
+
+	TODO: Refactor 1&2 and 3&4 into seperate files.
+*/
+
 #include <linux/module.h>
 #include <linux/semaphore.h>
 #include <linux/pci.h>
+#include <linux/interrupt.h>
+#include <linux/workqueue.h>
 
 #include <litmus/sched_trace.h>
 #include <litmus/nvidia_info.h>
@@ -9,10 +20,6 @@
 #include <litmus/sched_plugin.h>
 
 #include <litmus/binheap.h>
-
-#ifdef CONFIG_LITMUS_SOFTIRQD
-#include <litmus/litmus_softirq.h>
-#endif
 
 #if defined(CONFIG_NV_DRV_331_13)
 #define NV_MAJOR_V 331
@@ -396,6 +403,61 @@ int is_nvidia_func(void* func_addr)
 	return(ret);
 }
 
+int nv_schedule_work(struct work_struct *work)
+{
+#if defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON) || \
+	defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED)
+	if(nv_schedule_work_klmirqd(work))
+		return 1;
+#endif
+	/* default to linux handler */
+	queue_work(system_wq, work);
+}
+
+void nv_tasklet_schedule(struct tasklet_struct *t)
+{
+	/* assume t has already been identified as an nvidia tasklet */
+#if defined(CONFIG_LITMUS_NVIDIA_NONSPLIT_INTERRUPTS)
+	if (nv_tasklet_schedule_now(t))
+		return;
+#elif defined(CONFIG_LITMUS_SOFTIRQD)
+	if (nv_tasklet_schedule_klmirqd(t, _litmus_tasklet_schedule))
+		return;
+#endif
+	/* default to linux handler */
+	___tasklet_schedule(t);
+}
+
+void nv_tasklet_hi_schedule(struct tasklet_struct *t)
+{
+	/* assume t has already been identified as an nvidia tasklet */
+#if defined(CONFIG_LITMUS_NVIDIA_NONSPLIT_INTERRUPTS)
+	if (nv_tasklet_schedule_now(t))
+		return;
+#elif defined(CONFIG_LITMUS_SOFTIRQD)
+	if (nv_tasklet_schedule_klmirqd(t, _litmus_tasklet_hi_schedule))
+		return;
+#endif
+	/* default to linux handler */
+	___tasklet_hi_schedule(t);
+}
+
+void nv_tasklet_hi_schedule_first(struct tasklet_struct *t)
+{
+	BUG_ON(!irqs_disabled());
+
+	/* assume t has already been identified as an nvidia tasklet */
+#if defined(CONFIG_LITMUS_NVIDIA_NONSPLIT_INTERRUPTS)
+	if (nv_tasklet_schedule_now(t))
+		return;
+#elif defined(CONFIG_LITMUS_SOFTIRQD)
+	if (nv_tasklet_schedule_klmirqd(t, _litmus_tasklet_hi_schedule_first))
+		return;
+#endif
+	/* default to linux handler */
+	___tasklet_hi_schedule_first(t);
+}
+
 u32 get_tasklet_nv_device_num(const struct tasklet_struct *t)
 {
 	/* TODO: use hard-coded offsets instead of including structures
@@ -644,8 +706,38 @@ static int destroy_threads(nv_device_registry_t* reg, int device)
 
 	return ret;
 }
-#endif /* end LITMUS_SOFTIRQD */
 
+#if defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON) || \
+	defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED)
+/* called by Linux's schedule_work() to hand GPU work_structs to klmirqd */
+int nv_schedule_work_klmirqd(struct work_struct *work)
+{
+	unsigned long flags;
+	u32 nvidia_device = get_work_nv_device_num(work);
+	struct task_struct* klmirqd_th =
+			get_and_lock_nvklmworkqd_thread(nvidia_device, &flags);
+
+	if (likely(klmirqd_th)) {
+		TRACE("Handling NVIDIA workq for device %u (klmirqd: %s/%d) at %llu\n",
+			nvidia_device,
+			klmirqd_th->comm,
+			klmirqd_th->pid,
+			litmus_clock());
+
+		sched_trace_work_release(NULL, nvidia_device);
+		if (likely(litmus_schedule_work(work, klmirqd_th))) {
+			unlock_nvklmworkqd_thread(nvidia_device, &flags);
+			return 1; /* success */
+		}
+	}
+
+	return 0;
+}
+#endif /* end LITMUS_NVIDIA_WORKQ_ON || WORKQ_ON_DEDICATED */
+
+
+
+#endif /* end LITMUS_SOFTIRQD */
 
 static int init_nv_device_reg(void)
 {
@@ -835,7 +927,7 @@ struct task_struct* get_nvklmirqd_thread(u32 target_device_id)
 }
 
 #if defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON) || \
-		defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED)
+	defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED)
 struct task_struct* get_and_lock_nvklmworkqd_thread(u32 target_device_id,
 				unsigned long* flags)
 {
@@ -898,7 +990,59 @@ static int gpu_klmirqd_decrease_priority(struct task_struct *klmirqd,
 	retval = litmus->__decrease_prio(klmirqd, hp, budget_triggered);
 	return retval;
 }
+
+int nv_tasklet_schedule_klmirqd(struct tasklet_struct *t,
+				klmirqd_tasklet_sched_t klmirqd_func)
+{
+	unsigned long flags;
+	u32 nvidia_device;
+	struct task_struct* klmirqd_th;
+
+	nvidia_device = get_tasklet_nv_device_num(t);
+	klmirqd_th = get_and_lock_nvklmirqd_thread(nvidia_device, &flags);
+
+	if (likely(klmirqd_th)) {
+		TRACE("Handling NVIDIA tasklet for device %u (klmirqd: %s/%d) at %llu\n",
+			nvidia_device,
+			klmirqd_th->comm,
+			klmirqd_th->pid,
+			litmus_clock());
+
+		if(likely(klmirqd_func(t, klmirqd_th))) {
+			unlock_nvklmirqd_thread(nvidia_device, &flags);
+			return 1; /* success */
+		}
+	}
+	return 0;
+}
 #endif  /* end LITMUS_SOFTIRQD */
+
+#ifdef CONFIG_LITMUS_NVIDIA_NONSPLIT_INTERRUPTS
+int nv_tasklet_schedule_now(struct tasklet_struct *t)
+{
+	int success = 1;
+	TRACE("Handling NVIDIA tasklet.\n");
+
+	if(likely(tasklet_trylock(t))) {
+		if(likely(!atomic_read(&t->count))) {
+			if(unlikely(!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state)))
+				BUG();
+			t->func(t->data);
+			tasklet_unlock(t);
+		}
+		else {
+			success = 0;
+		}
+
+		tasklet_unlock(t);
+	}
+	else {
+		success = 0;
+	}
+
+	return success;
+}
+#endif
 
 
 /* call when an gpu owner becomes real-time */

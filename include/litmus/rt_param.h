@@ -162,8 +162,12 @@ struct control_page {
 #include <linux/semaphore.h>
 #include <litmus/binheap.h>
 
-/*** GPU affinity tracking structures ***/
+#ifdef CONFIG_LITMUS_SOFTIRQD
+#include <linux/interrupt.h>
+#endif
 
+#if defined(CONFIG_LITMUS_NVIDIA) && defined(CONFIG_LITMUS_AFFINITY_LOCKING)
+/*** GPU affinity tracking structures ***/
 typedef enum gpu_migration_dist
 {
 	MIG_LOCAL	= 0,
@@ -184,8 +188,6 @@ typedef struct feedback_est
 #endif
 
 #define AVG_EST_WINDOW_SIZE 20
-typedef int (*notify_rsrc_exit_t)(struct task_struct* tsk);
-
 typedef struct avg_est {
 	lt_t history[AVG_EST_WINDOW_SIZE];
 	uint16_t count;
@@ -194,7 +196,34 @@ typedef struct avg_est {
 	lt_t avg;
 	lt_t std;
 } avg_est_t;
+#endif /* end LITMUS_NVIDIA && LITMUS_AFFINITY_LOCKING */
 
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+typedef int (*notify_rsrc_exit_t)(struct task_struct* tsk);
+#endif /* end LITMUS_AFFINITY_LOCKING */
+
+#ifdef CONFIG_LITMUS_SOFTIRQD
+/* klmirqd (real-time threaded interrupt) thread data */
+struct klmirqd_info
+{
+	struct task_struct*	klmirqd;
+	unsigned int	terminating:1;
+
+	raw_spinlock_t	lock;
+	u32			pending;
+	atomic_t	num_hi_pending;
+	atomic_t	num_low_pending;
+	atomic_t	num_work_pending;
+
+	struct tasklet_head	pending_tasklets_hi;
+	struct tasklet_head	pending_tasklets;
+	struct list_head	worklist;
+
+	struct list_head	klmirqd_reg;
+
+	struct completion*	exited;
+};
+#endif
 
 struct _rt_domain;
 struct bheap_node;
@@ -376,6 +405,16 @@ struct rt_param {
 
 	/* Pointer to the page shared between userspace and kernel. */
 	struct control_page * ctrl_page;
+
+#ifdef CONFIG_LITMUS_SOFTIRQD
+	/* proxy threads have minimum priority by default */
+	unsigned int        is_interrupt_thread:1;
+
+	/* pointer to data used by klmirqd thread.
+	   valid only if ptr only valid if is_interrupt_thread == 1 */
+	struct klmirqd_info* klmirqd_info;
+#endif /* end LITMUS_SOFTIRQD */
+
 };
 
 #endif

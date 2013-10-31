@@ -245,7 +245,7 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 	}
 }
 
-#if 0
+#if 0 /* PORT RECHECK */
 feather_callback void do_sched_trace_action(unsigned long id,
 				unsigned long _task,
 				unsigned long action)
@@ -259,6 +259,7 @@ feather_callback void do_sched_trace_action(unsigned long id,
 		put_record(rec);
 	}
 }
+#endif
 
 feather_callback void do_sched_trace_migration(unsigned long id,
 				unsigned long _task,
@@ -277,7 +278,6 @@ feather_callback void do_sched_trace_migration(unsigned long id,
 		put_record(rec);
 	}
 }
-#endif
 
 feather_callback void do_sched_trace_lock(unsigned long id,
 				unsigned long _task,
@@ -295,7 +295,6 @@ feather_callback void do_sched_trace_lock(unsigned long id,
 	}
 }
 
-#if 0
 feather_callback void do_sched_trace_tasklet_release(unsigned long id,
 				unsigned long _owner,
 				unsigned long _device)
@@ -309,7 +308,6 @@ feather_callback void do_sched_trace_tasklet_release(unsigned long id,
 		put_record(rec);
 	}
 }
-
 
 feather_callback void do_sched_trace_tasklet_begin(unsigned long id,
 				unsigned long _owner)
@@ -329,7 +327,6 @@ feather_callback void do_sched_trace_tasklet_begin(unsigned long id,
 	}
 }
 EXPORT_SYMBOL(do_sched_trace_tasklet_begin);
-
 
 feather_callback void do_sched_trace_tasklet_end(unsigned long id,
 				unsigned long _owner,
@@ -352,7 +349,6 @@ feather_callback void do_sched_trace_tasklet_end(unsigned long id,
 }
 EXPORT_SYMBOL(do_sched_trace_tasklet_end);
 
-
 feather_callback void do_sched_trace_work_release(unsigned long id,
 				unsigned long _owner,
 				unsigned long _device)
@@ -366,7 +362,6 @@ feather_callback void do_sched_trace_work_release(unsigned long id,
 		put_record(rec);
 	}
 }
-
 
 feather_callback void do_sched_trace_work_begin(unsigned long id,
 				unsigned long _owner,
@@ -383,7 +378,6 @@ feather_callback void do_sched_trace_work_begin(unsigned long id,
 	}
 }
 EXPORT_SYMBOL(do_sched_trace_work_begin);
-
 
 feather_callback void do_sched_trace_work_end(unsigned long id,
 				unsigned long _owner,
@@ -402,7 +396,6 @@ feather_callback void do_sched_trace_work_end(unsigned long id,
 	}
 }
 EXPORT_SYMBOL(do_sched_trace_work_end);
-#endif
 
 feather_callback void do_sched_trace_eff_prio_change(unsigned long id,
 				unsigned long _task,
@@ -422,7 +415,7 @@ feather_callback void do_sched_trace_eff_prio_change(unsigned long id,
 	}
 }
 
-#if 0
+#if 0 /* PORT RECHECK */
 /* pray for no nesting of nv interrupts on same CPU... */
 struct tracing_interrupt_map
 {

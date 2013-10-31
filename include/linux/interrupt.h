@@ -506,6 +506,12 @@ struct tasklet_struct
 	unsigned long data;
 };
 
+struct tasklet_head
+{
+	struct tasklet_struct *head;
+	struct tasklet_struct **tail;
+};
+
 #define DECLARE_TASKLET(name, func, data) \
 struct tasklet_struct name = { NULL, 0, ATOMIC_INIT(0), func, data }
 
@@ -541,6 +547,7 @@ static inline void tasklet_unlock_wait(struct tasklet_struct *t)
 #define tasklet_unlock(t) do { } while (0)
 #endif
 
+extern void ___tasklet_schedule(struct tasklet_struct *t);
 extern void __tasklet_schedule(struct tasklet_struct *t);
 
 static inline void tasklet_schedule(struct tasklet_struct *t)
@@ -549,6 +556,7 @@ static inline void tasklet_schedule(struct tasklet_struct *t)
 		__tasklet_schedule(t);
 }
 
+extern void ___tasklet_hi_schedule(struct tasklet_struct *t);
 extern void __tasklet_hi_schedule(struct tasklet_struct *t);
 
 static inline void tasklet_hi_schedule(struct tasklet_struct *t)
@@ -557,6 +565,7 @@ static inline void tasklet_hi_schedule(struct tasklet_struct *t)
 		__tasklet_hi_schedule(t);
 }
 
+extern void ___tasklet_hi_schedule_first(struct tasklet_struct *t);
 extern void __tasklet_hi_schedule_first(struct tasklet_struct *t);
 
 /*

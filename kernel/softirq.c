@@ -26,6 +26,10 @@
 #include <linux/smpboot.h>
 #include <linux/tick.h>
 
+#ifdef CONFIG_LITMUS_NVIDIA
+#include <litmus/nvidia_info.h>
+#endif
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/irq.h>
 
@@ -416,16 +420,33 @@ void open_softirq(int nr, void (*action)(struct softirq_action *))
 /*
  * Tasklets
  */
+
+/* LitmusRT: moved to interrupt.h
 struct tasklet_head
 {
 	struct tasklet_struct *head;
 	struct tasklet_struct **tail;
 };
+*/
 
 static DEFINE_PER_CPU(struct tasklet_head, tasklet_vec);
 static DEFINE_PER_CPU(struct tasklet_head, tasklet_hi_vec);
 
 void __tasklet_schedule(struct tasklet_struct *t)
+{
+#if defined(CONFIG_LITMUS_NVIDIA)
+	if(unlikely(is_nvidia_func(t->func)))
+		nv_tasklet_schedule(t);
+	else
+		___tasklet_schedule(t);
+#else
+	___tasklet_schedule(t);
+#endif
+}
+
+EXPORT_SYMBOL(__tasklet_schedule);
+
+void ___tasklet_schedule(struct tasklet_struct *t)
 {
 	unsigned long flags;
 
@@ -437,9 +458,23 @@ void __tasklet_schedule(struct tasklet_struct *t)
 	local_irq_restore(flags);
 }
 
-EXPORT_SYMBOL(__tasklet_schedule);
+EXPORT_SYMBOL(___tasklet_schedule);
 
 void __tasklet_hi_schedule(struct tasklet_struct *t)
+{
+#if defined(CONFIG_LITMUS_NVIDIA)
+	if(unlikely(is_nvidia_func(t->func)))
+		nv_tasklet_schedule(t);
+	else
+		___tasklet_hi_schedule(t);
+#else
+	___tasklet_hi_schedule(t);
+#endif
+}
+
+EXPORT_SYMBOL(__tasklet_hi_schedule);
+
+void ___tasklet_hi_schedule(struct tasklet_struct *t)
 {
 	unsigned long flags;
 
@@ -451,9 +486,21 @@ void __tasklet_hi_schedule(struct tasklet_struct *t)
 	local_irq_restore(flags);
 }
 
-EXPORT_SYMBOL(__tasklet_hi_schedule);
+EXPORT_SYMBOL(___tasklet_hi_schedule);
 
 void __tasklet_hi_schedule_first(struct tasklet_struct *t)
+{
+#if defined(CONFIG_LITMUS_NVIDIA)
+	if(unlikely(is_nvidia_func(t->func)))
+		nv_tasklet_schedule(t);
+	else
+		___tasklet_hi_schedule_first(t);
+#else
+	___tasklet_hi_schedule_first(t);
+#endif
+}
+
+void ___tasklet_hi_schedule_first(struct tasklet_struct *t)
 {
 	BUG_ON(!irqs_disabled());
 
@@ -462,7 +509,7 @@ void __tasklet_hi_schedule_first(struct tasklet_struct *t)
 	__raise_softirq_irqoff(HI_SOFTIRQ);
 }
 
-EXPORT_SYMBOL(__tasklet_hi_schedule_first);
+EXPORT_SYMBOL(___tasklet_hi_schedule_first);
 
 static void tasklet_action(struct softirq_action *a)
 {

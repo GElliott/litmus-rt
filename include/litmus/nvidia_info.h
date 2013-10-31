@@ -4,7 +4,7 @@
 #include <linux/interrupt.h>
 
 #ifdef CONFIG_LITMUS_SOFTIRQD
-#include <litmus/litmus_softirq.h>
+#include <litmus/klmirqd.h>
 #endif
 
 #define NV_DEVICE_NUM CONFIG_NV_DEVICE_NUM
@@ -21,6 +21,14 @@ void shutdown_nvidia_info(void);
 
 int is_nvidia_func(void* func_addr);
 
+struct work_struct;
+int nv_schedule_work(struct work_struct *work);
+
+struct tasklet_struct;
+void nv_tasklet_schedule(struct tasklet_struct *t);
+void nv_tasklet_hi_schedule(struct tasklet_struct *t);
+void nv_tasklet_hi_schedule_first(struct tasklet_struct *t);
+
 /* Returns the NVIDIA device # associated with provided tasklet
    and work_struct. */
 u32 get_tasklet_nv_device_num(const struct tasklet_struct *t);
@@ -36,14 +44,26 @@ struct task_struct* get_and_lock_nvklmirqd_thread(u32 target_device_id,
 void unlock_nvklmirqd_thread(u32 target_device_id, unsigned long* flags);
 struct task_struct* get_nvklmirqd_thread(u32 target_device_id);
 
+typedef int (*klmirqd_tasklet_sched_t)(struct tasklet_struct *t,
+				struct task_struct* klmirqd_th);
+int nv_tasklet_schedule_klmirqd(struct tasklet_struct *t,
+				klmirqd_tasklet_sched_t klmirqd_func);
+
 #if defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON) || \
 	defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED)
 struct task_struct* get_and_lock_nvklmworkqd_thread(u32 target_device_id,
 				unsigned long* flags);
 void unlock_nvklmworkqd_thread(u32 target_device_id, unsigned long* flags);
 struct task_struct* get_nvklmworkqd_thread(u32 target_device_id);
-#endif
+
+struct work_struct;
+int nv_schedule_work_klmirqd(struct work_struct *work);
+#endif /* end LITMUS_NVIDIA_WORKQ_ON || LITMUS_NVIDIA_WORKQ_ON_DEDICATED */
 #endif /* end LITMUS_SOFTIRQD */
+
+#ifdef CONFIG_LITMUS_NVIDIA_NONSPLIT_INTERRUPTS
+void nv_tasklet_schedule_now(struct tasklet_struct *t);
+#endif
 
 /* call when the GPU-holding task, t, blocks */
 long enable_gpu_owner(struct task_struct *t);

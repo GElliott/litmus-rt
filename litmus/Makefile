@@ -30,6 +30,7 @@ obj-$(CONFIG_SCHED_CPU_AFFINITY) += affinity.o
 obj-$(CONFIG_LITMUS_LOCKING) += kfmlp_lock.o
 obj-$(CONFIG_LITMUS_NESTED_LOCKING) += fifo_lock.o prioq_lock.o ikglp_lock.o
 obj-$(CONFIG_LITMUS_AFFINITY_LOCKING) += kexclu_affinity.o
+obj-$(CONFIG_LITMUS_NVIDIA) += nvidia_info.o
 
 obj-$(CONFIG_FEATHER_TRACE) += ft_event.o ftdev.o
 obj-$(CONFIG_SCHED_TASK_TRACE) += sched_task_trace.o

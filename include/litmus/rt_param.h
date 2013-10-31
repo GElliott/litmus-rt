@@ -203,6 +203,32 @@ struct rt_param {
 	/* has the task completed? */
 	unsigned int		completed:1;
 
+	/* prevent this task from being requeued on another processor (used to
+	 * coordinate GSN-EDF, C-EDF, and sync.c) */
+	unsigned int		dont_requeue:1;
+
+#ifdef CONFIG_LITMUS_NVIDIA
+	long unsigned int	held_gpus;		/* bitmap of held GPUs. */
+	struct binheap_node	gpu_owner_node;	/* just one GPU for now... */
+	unsigned int		hide_from_gpu:1;
+
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+	avg_est_t		gpu_migration_est[MIG_LAST+1];
+	gpu_migration_dist_t	gpu_migration;
+	int			last_gpu;
+	lt_t			accum_gpu_time;
+	lt_t			gpu_time_stamp
+	unsigned int		suspend_gpu_tracker_on_block:1;
+#endif /* end LITMUS_AFFINITY_LOCKING */
+#endif /* end LITMUS_NVIDIA */
+
+#if 0 /* PORT RECHECK */
+#ifdef CONFIG_LITMUS_AFFINITY_LOCKING
+	notify_rsrc_exit_t  rsrc_exit_cb;
+	void* rsrc_exit_cb_args
+#endif
+#endif
+
 #ifdef CONFIG_LITMUS_LOCKING
 	/* Is the task being priority-boosted by a locking protocol? */
 	unsigned int		priority_boosted:1;

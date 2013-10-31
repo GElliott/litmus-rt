@@ -6,15 +6,24 @@
 #include <litmus/litmus.h>
 #include <litmus/jobs.h>
 
-static inline void setup_release(struct task_struct *t, lt_t release)
+void setup_release(struct task_struct *t, lt_t release)
 {
 	/* prepare next release */
 	t->rt_param.job_params.release = release;
 	t->rt_param.job_params.deadline = release + get_rt_relative_deadline(t);
 	t->rt_param.job_params.exec_time = 0;
 
+#if 0 /* PORT CHECK */
+	/* kludge - TODO: Move this to budget.h/.c */
+	if (t->rt_param.budget.ops)
+		bt_flags_reset(t);
+#endif
+
 	/* update job sequence number */
 	t->rt_param.job_params.job_no++;
+
+	TRACE_TASK(t, "preparing for next job: %d\n",
+					t->rt_param.job_params.job_no);
 }
 
 void prepare_for_next_period(struct task_struct *t)
@@ -61,7 +70,6 @@ long default_wait_for_release_at(lt_t release_time)
 	return complete_job();
 }
 
-
 /*
  *	Deactivate current task until the beginning of the next period.
  */
@@ -75,3 +83,52 @@ long complete_job(void)
 	schedule();
 	return 0;
 }
+
+#if defined(CONFIG_REALTIME_AUX_TASKS) || defined(CONFIG_LITMUS_NVIDIA)
+void hide_from_workers(struct task_struct *t, worker_visibility_t *wv)
+{
+#ifdef CONFIG_REALTIME_AUX_TASKS
+	if (tsk_rt(t)->has_aux_tasks) {
+		if (wv) {
+			wv->aux_hide = tsk_rt(t)->hide_from_aux_tasks;
+			wv->do_aux_restore = 1;
+		}
+		tsk_rt(t)->hide_from_aux_tasks = 1;
+	}
+#endif
+#ifdef CONFIG_LITMUS_NVIDIA
+	if (tsk_rt(t)->held_gpus) {
+		if (wv) {
+			wv->gpu_hide = tsk_rt(t)->hide_from_gpu;
+			wv->do_gpu_restore = 1;
+		}
+		tsk_rt(t)->hide_from_gpu = 1;
+	}
+#endif
+}
+
+void show_to_workers(struct task_struct *t, worker_visibility_t *wv)
+{
+	if (wv) {
+#ifdef CONFIG_REALTIME_AUX_TASKS
+		if (wv->do_aux_restore)
+			tsk_rt(t)->hide_from_aux_tasks = wv->aux_hide;
+#endif
+#ifdef CONFIG_LITMUS_NVIDIA
+		if (wv->do_gpu_restore)
+			tsk_rt(t)->hide_from_gpu = wv->gpu_hide;
+#endif
+	}
+	else {
+#ifdef CONFIG_REALTIME_AUX_TASKS
+		if (tsk_rt(t)->has_aux_tasks)
+			tsk_rt(t)->hide_from_aux_tasks = 0;
+#endif
+#ifdef CONFIG_LITMUS_NVIDIA
+		if (tsk_rt(t)->held_gpus)
+			tsk_rt(t)->hide_from_gpu = 0;
+#endif
+	}
+}
+
+#endif /* REALTIME_AUX_TASKS || LITMUS_NVIDIA */

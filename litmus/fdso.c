@@ -41,6 +41,11 @@ static const struct fdso_ops* fdso_ops[] = {
 	&generic_affinity_ops, /* IKGLP_GPU_AFF_OBS */
 	&generic_affinity_ops, /* KFMLP_SIMPLE_GPU_AFF_OBS */
 	&generic_affinity_ops, /* KFMLP_GPU_AFF_OBS */
+#else
+	NULL,
+	NULL,
+	NULL,
+	NULL,
 #endif
 	&generic_lock_ops, /* PRIOQ_MUTEX */
 };

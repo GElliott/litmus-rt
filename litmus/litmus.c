@@ -20,6 +20,8 @@
 #include <litmus/litmus_proc.h>
 #include <litmus/sched_trace.h>
 
+/* PORT RECHECK THIS WHOLE DAMN FILE */
+
 #ifdef CONFIG_SCHED_CPU_AFFINITY
 #include <litmus/affinity.h>
 #endif
@@ -27,6 +29,10 @@
 #ifdef CONFIG_SCHED_LITMUS_TRACEPOINT
 #define CREATE_TRACE_POINTS
 #include <trace/events/litmus.h>
+#endif
+
+#ifdef CONFIG_REALTIME_AUX_TASKS
+#include <litmus/aux_tasks.h>
 #endif
 
 /* Number of RT tasks that exist in the system */
@@ -470,6 +476,14 @@ void litmus_fork(struct task_struct* p)
 
 	/* od tables are never inherited across a fork */
 	p->od_table = NULL;
+}
+
+/* Called right before copy_process() returns a forked thread. */
+void litmus_post_fork_thread(struct task_struct* p)
+{
+#ifdef CONFIG_REALTIME_AUX_TASKS
+	make_aux_task_if_required(p);
+#endif
 }
 
 /* Called upon execve().

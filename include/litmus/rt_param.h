@@ -51,6 +51,16 @@ typedef enum {
 	TASK_EARLY
 } release_policy_t;
 
+/* Real-time behaviors of forked threads that are not explicitly real-time. */
+typedef enum {
+	AUX_ENABLE  = 0x1,	/* Priority of non-rt (aux) threads inherit from max
+						   of suspended real-time thread within the process. */
+	AUX_CURRENT = (AUX_ENABLE<<1),	/* All current non-rt threads become
+									   aux threads. */
+	AUX_FUTURE  = (AUX_CURRENT<<1)	/* Any non-rt threads forked in the future
+									   automatically become aux threads. */
+} auxiliary_thread_flags_t;
+
 /* We use the common priority interpretation "lower index == higher priority",
  * which is commonly used in fixed-priority schedulability analysis papers.
  * So, a numerically lower priority value implies higher scheduling priority,
@@ -415,8 +425,26 @@ struct rt_param {
 	struct klmirqd_info* klmirqd_info;
 #endif /* end LITMUS_SOFTIRQD */
 
+#ifdef CONFIG_REALTIME_AUX_TASKS
+	unsigned int	is_aux_task:1;
+	unsigned int	aux_ready:1;
+	unsigned int	has_aux_tasks:1;
+	unsigned int	hide_from_aux_tasks:1;
+
+	struct list_head	aux_task_node;
+	struct binheap_node	aux_task_owner_node;
+#endif
 };
 
+#ifdef CONFIG_REALTIME_AUX_TASKS
+struct aux_data {
+	struct list_head	aux_tasks;
+	struct binheap	aux_task_owners;
+	unsigned int	initialized:1;
+	unsigned int	aux_future:1;
+};
 #endif
+
+#endif /* __KERNEL */
 
 #endif

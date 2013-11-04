@@ -10,7 +10,7 @@
 #define __NR_complete_job	__LSC(2)
 #define __NR_od_open		__LSC(3)
 #define __NR_od_close		__LSC(4)
-#define __NR_litmus_lock       	__LSC(5)
+#define __NR_litmus_lock	__LSC(5)
 #define __NR_litmus_unlock	__LSC(6)
 #define __NR_query_job_no	__LSC(7)
 #define __NR_wait_for_job_release __LSC(8)
@@ -23,4 +23,6 @@
 #define __NR_litmus_should_unlock __LSC(14)
 #define __NR_litmus_dgl_should_unlock __LSC(15)
 
-#define NR_litmus_syscalls 16
+#define __NR_set_aux_tasks	__LSC(16)
+
+#define NR_litmus_syscalls 17

@@ -879,11 +879,11 @@ void suspend_for_lock(void)
 #endif
 
 #if defined(CONFIG_LITMUS_AFFINITY_LOCKING) && defined(CONFIG_LITMUS_NVIDIA)
-	// disable tracking
+	/* disable tracking */
 	if(tsk_rt(t)->held_gpus)
 	{
-		// tracking is actually stopped in schedule(), where it
-		// is also stopped upon preemption
+		/* tracking is actually stopped in schedule(), where it
+		   is also stopped upon preemption */
 		tsk_rt(t)->suspend_gpu_tracker_on_block = 1;
 	}
 #endif
@@ -891,7 +891,7 @@ void suspend_for_lock(void)
 	schedule();
 
 #if defined(CONFIG_LITMUS_AFFINITY_LOCKING) && defined(CONFIG_LITMUS_NVIDIA)
-	// re-enable tracking
+	/* re-enable tracking */
 	if(tsk_rt(t)->held_gpus)
 		tsk_rt(t)->suspend_gpu_tracker_on_block = 0;
 #endif

@@ -31,6 +31,7 @@ struct task_struct* __waitqueue_remove_first(wait_queue_head_t *wq);
 #define NO_CPU			0xffffffff
 
 void litmus_fork(struct task_struct *tsk);
+void litmus_post_fork_thread(struct task_struct *tsk);
 void litmus_exec(void);
 /* clean up real-time state of a task */
 void litmus_clear_state(struct task_struct *dead_tsk);
@@ -46,6 +47,7 @@ void litmus_do_exit(struct task_struct *tsk);
 	((t)->rt_param.transition_pending)
 
 #define tsk_rt(t)		(&(t)->rt_param)
+#define tsk_aux(t)      (&(t)->aux_data)
 
 /*	Realtime utility macros */
 #ifdef CONFIG_LITMUS_LOCKING

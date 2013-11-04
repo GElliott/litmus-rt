@@ -1371,6 +1371,10 @@ struct task_struct {
 
 	/* LITMUS RT parameters and state */
 	struct rt_param rt_param;
+#ifdef CONFIG_REALTIME_AUX_TASKS
+	struct aux_data aux_data;
+#endif
+	/* end LITMUS RT */
 
 	/* references to PI semaphores, etc. */
 	struct od_table_entry *od_table;

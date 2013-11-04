@@ -1489,8 +1489,12 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	write_unlock_irq(&tasklist_lock);
 	proc_fork_connector(p);
 	cgroup_post_fork(p);
-	if (clone_flags & CLONE_THREAD)
+	if (clone_flags & CLONE_THREAD) {
 		threadgroup_change_end(current);
+#ifdef CONFIG_REALTIME_AUX_TASKS
+		litmus_post_fork_thread(p);
+#endif
+	}
 	perf_event_fork(p);
 
 	trace_task_newtask(p, clone_flags);

@@ -1,6 +1,4 @@
-/* litmus/sync.c - Support for synchronous and asynchronous task system releases.
- *
- *
+/* litmus/sync.c - Support for synchronous and asynchronous task system releass.
  */
 
 #include <asm/atomic.h>
@@ -15,6 +13,9 @@
 #include <litmus/jobs.h>
 
 #include <litmus/sched_trace.h>
+#if 0 /* PORT RECHECK */
+#include <litmus/budget.h>
+#endif
 
 struct ts_release_wait {
 	struct list_head list;
@@ -33,11 +34,18 @@ struct ts_release_wait {
 static LIST_HEAD(task_release_list);
 static DEFINE_MUTEX(task_release_lock);
 
-static long do_wait_for_ts_release(void)
+static long do_wait_for_ts_release(struct timespec *wake)
 {
 	DECLARE_TS_RELEASE_WAIT(wait);
 
 	long ret = -ERESTARTSYS;
+
+	struct task_struct *t = current;
+	int is_rt = is_realtime(t);
+
+#if defined(CONFIG_REALTIME_AUX_TASKS) || defined(CONFIG_LITMUS_NVIDIA)
+	DECLARE_WORKER_VIS_FLAGS(vis_flags);
+#endif
 
 	if (mutex_lock_interruptible(&task_release_lock))
 		goto out;
@@ -46,13 +54,79 @@ static long do_wait_for_ts_release(void)
 
 	mutex_unlock(&task_release_lock);
 
+	if (is_rt) {
+#if defined(CONFIG_REALTIME_AUX_TASKS) || defined(CONFIG_LITMUS_NVIDIA)
+		hide_from_workers(t, &vis_flags);
+#endif
+#if 0 /* PORT RECHECK */
+		bt_flag_set(t, BTF_WAITING_FOR_RELEASE);
+		mb();
+		budget_state_machine(t,on_exit); // do this here and not in schedule()?
+#endif
+	}
+
+	TRACE_TASK(t, "waiting for ts release.\n");
+
+#if 0 /* PORT RECHECK */
+	if (is_rt)
+		BUG_ON(!bt_flag_is_set(t, BTF_WAITING_FOR_RELEASE));
+#endif
+
 	/* We are enqueued, now we wait for someone to wake us up. */
 	ret = wait_for_completion_interruptible(&wait.completion);
+
+	TRACE_TASK(t, "released by ts release!\n");
+
+	if (is_rt) {
+#if 0 /* PORT RECHECK */
+		bt_flag_clear(t, BTF_WAITING_FOR_RELEASE);
+#endif
+#if defined(CONFIG_REALTIME_AUX_TASKS) || defined(CONFIG_LITMUS_NVIDIA)
+		show_to_workers(t, &vis_flags);
+#endif
+	}
 
 	if (!ret) {
 		/* Completion succeeded, setup release time. */
 		ret = litmus->wait_for_release_at(
 			wait.ts_release_time + get_rt_phase(current));
+#if 0 /* PORT RECHECK */
+		if (is_rt) {
+			lt_t phasedRelease = wait.ts_release_time
+					+ t->rt_param.task_params.phase;
+			*wake = ns_to_timespec(phasedRelease);
+
+			/* Setting this flag before releasing ensures that this CPU
+			 * will be the next CPU to requeue the task on a ready or
+			 * release queue. Cleared by prepare_for_next_period()
+			 */
+			tsk_rt(current)->dont_requeue = 1;
+			tsk_rt(t)->completed = 1;
+#if 0 /* PORT RECHECK */
+			tsk_rt(t)->job_params.backlog = 0;
+			tsk_rt(t)->job_params.is_backlogged_job = 0;
+			tsk_rt(t)->budget.suspend_timestamp = 0;
+			bt_flag_clear(t, BTF_BUDGET_EXHAUSTED);
+			mb();
+#endif
+
+			/* completion succeeded, set up release. subtract off
+			 * period because schedule()->job_completion() will
+			 * advances us to the correct time */
+			/* TODO: pfair might require pass through release_at... */
+			setup_release(t, phasedRelease - t->rt_param.task_params.period);
+			schedule();
+		}
+		else {
+			/* sleep until our release time */
+			if (litmus_clock() < wait.ts_release_time) {
+				ktime_t remaining =
+						ns_to_ktime(wait.ts_release_time - litmus_clock());
+				schedule_hrtimeout(&remaining, HRTIMER_MODE_REL);
+			}
+			*wake = ns_to_timespec(wait.ts_release_time);
+		}
+#endif
 	} else {
 		/* We were interrupted, must cleanup list. */
 		mutex_lock(&task_release_lock);
@@ -103,6 +177,7 @@ static long do_release_ts(lt_t start)
 			list_entry(pos, struct ts_release_wait, list);
 
 		task_count++;
+
 		wait->ts_release_time = start;
 		complete(&wait->completion);
 	}
@@ -117,13 +192,15 @@ out:
 }
 
 
-asmlinkage long sys_wait_for_ts_release(void)
+asmlinkage long sys_wait_for_ts_release(struct timespec __user *__wake)
 {
+	struct timespec wake;
 	long ret = -EPERM;
-	struct task_struct *t = current;
 
-	if (is_realtime(t))
-		ret = do_wait_for_ts_release();
+	ret = do_wait_for_ts_release(&wake);
+
+	if (__wake && access_ok(VERIFY_WRITE, __wake, sizeof(struct timespec)))
+		__copy_to_user(__wake, &wake, sizeof(wake));
 
 	return ret;
 }
@@ -132,13 +209,15 @@ asmlinkage long sys_wait_for_ts_release(void)
 
 asmlinkage long sys_release_ts(lt_t __user *__delay)
 {
-	long ret;
-	lt_t delay;
+	long ret = 0;
+	lt_t delay = 0;
 	lt_t start_time;
 
 	/* FIXME: check capabilities... */
 
-	ret = copy_from_user(&delay, __delay, sizeof(delay));
+	if (__delay)
+		ret = copy_from_user(&delay, __delay, sizeof(delay));
+
 	if (ret == 0) {
 		/* round up to next larger integral millisecond */
 		start_time = litmus_clock();

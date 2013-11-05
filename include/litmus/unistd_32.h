@@ -25,4 +25,6 @@
 
 #define __NR_set_aux_tasks	__LSC(16)
 
-#define NR_litmus_syscalls 17
+#define __NR_sched_trace_event	__LSC(17)
+
+#define NR_litmus_syscalls 18

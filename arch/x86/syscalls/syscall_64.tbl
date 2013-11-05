@@ -333,6 +333,12 @@
 360	common	wait_for_ts_release	sys_wait_for_ts_release
 361	common	release_ts		sys_release_ts
 362	common	null_call		sys_null_call
+363	common	litmus_dgl_lock	sys_litmus_dgl_lock	
+364	common	litmus_dgl_unlock	sys_litmus_dgl_unlock
+365	common	litmus_should_yield_lock	sys_litmus_should_yield_lock
+366	common	litmus_dgl_should_yield_lock	sys_litmus_dgl_should_yield_lock
+367	common	set_aux_tasks	sys_set_aux_tasks
+368	common	sched_trace_event	sys_sched_trace_event
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact

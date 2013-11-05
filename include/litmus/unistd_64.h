@@ -42,4 +42,7 @@ __SYSCALL(__NR_litmus_dgl_should_yield_lock, sys_litmus_dgl_should_yield_lock)
 #define __NR_set_aux_tasks	__LSC(16)
 __SYSCALL(__NR_set_aux_tasks, sys_set_aux_tasks)
 
-#define NR_litmus_syscalls 17
+#define __NR_sched_trace_event	__LSC(17)
+__SYSCALL(__NR_sched_trace_event, sys_sched_trace_event)
+
+#define NR_litmus_syscalls 18

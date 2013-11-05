@@ -24,8 +24,10 @@
 #include <litmus/jobs.h>
 #endif
 
-static int create_generic_lock(void** obj_ref, obj_type_t type, void* __user arg);
-static int open_generic_lock(struct od_table_entry* entry, void* __user arg);
+static int create_generic_lock(void** obj_ref, obj_type_t type,
+				void* __user arg);
+static int open_generic_lock(struct od_table_entry* entry,
+				void* __user arg);
 static int close_generic_lock(struct od_table_entry* entry);
 static void destroy_generic_lock(obj_type_t type, void* sem);
 
@@ -50,7 +52,8 @@ static inline struct litmus_lock* get_lock(struct od_table_entry* entry)
 	return (struct litmus_lock*) entry->obj->obj;
 }
 
-static int create_generic_lock(void** obj_ref, obj_type_t type, void* __user arg)
+static int create_generic_lock(void** obj_ref, obj_type_t type,
+				void* __user arg)
 {
 	struct litmus_lock* lock;
 	int err;
@@ -71,7 +74,8 @@ static int create_generic_lock(void** obj_ref, obj_type_t type, void* __user arg
 		lock->ident = atomic_inc_return(&lock_id_gen);
 		*obj_ref = lock;
 
-		TRACE_CUR("Lock %d (%p) created. Type = %d\n.", lock->ident, lock, type);
+		TRACE_CUR("Lock %d (%p) created. Type = %d\n.",
+						lock->ident, lock, type);
 
 		if (lock->proc && lock->proc->add)
 			lock->proc->add(lock);
@@ -131,14 +135,14 @@ asmlinkage long sys_litmus_lock(int lock_od)
 			if (tsk_rt(current)->outermost_lock == NULL) {
 				TRACE_CUR("Lock %d is outermost lock.\n", l->ident);
 				tsk_rt(current)->outermost_lock = l;
-	}
+			}
 		}
 		flush_pending_wakes();
 		local_irq_restore(flags);
 	}
 
-	/* Note: task my have been suspended or preempted in between!  Take
-	 * this into account when computing overheads. */
+	/* Note: task my have been suspended or preempted in between! Take this
+	 * into account when computing overheads. */
 	TS_LOCK_END;
 
 	TS_SYSCALL_OUT_START;
@@ -277,7 +281,7 @@ void print_hp_waiters(struct binheap_node* n, int depth)
 
 #ifdef CONFIG_LITMUS_DGL_SUPPORT
 
-struct litmus_lock* select_next_lock(dgl_wait_state_t* dgl_wait /*, struct litmus_lock* prev_lock*/)
+struct litmus_lock* select_next_lock(dgl_wait_state_t* dgl_wait)
 {
 	int num_locks = dgl_wait->size;
 	int last = dgl_wait->last_primary;
@@ -292,8 +296,8 @@ struct litmus_lock* select_next_lock(dgl_wait_state_t* dgl_wait /*, struct litmu
 
 	BUG_ON(tsk_rt(dgl_wait->task)->blocked_lock);
 
-	// note reverse order
-	// Try to enable priority on a lock that has an owner.
+	/* Try to enable priority on a lock that has an owner.
+	   Note reverse loop iteration order */
 	idx = start = (last != 0) ? last - 1 : num_locks - 1;
 	do {
 		struct litmus_lock *l = dgl_wait->locks[idx];
@@ -309,10 +313,9 @@ struct litmus_lock* select_next_lock(dgl_wait_state_t* dgl_wait /*, struct litmu
 		idx = (idx != 0) ? idx - 1 : num_locks - 1;
 	} while(idx != start);
 
-	// There was no one to push on.  This can happen if the blocked task is
-	// behind a task that is idling a prioq-mutex.
-
-	// note reverse order
+	/* There was no one to push on.  This can happen if the blocked task is
+	   behind a task that is idling a prioq-mutex.
+	   Note reverse order. */
 	idx = (last != 0) ? last - 1 : num_locks - 1;
 	do {
 		struct litmus_lock *l = dgl_wait->locks[idx];
@@ -333,7 +336,6 @@ struct litmus_lock* select_next_lock(dgl_wait_state_t* dgl_wait /*, struct litmu
 
 int dgl_wake_up(wait_queue_t *wq_node, unsigned mode, int sync, void *key)
 {
-	// should never be called.
 	BUG();
 	return 1;
 }
@@ -376,14 +378,14 @@ void init_dgl_waitqueue_entry(wait_queue_t *wq_node, dgl_wait_state_t *dgl_wait)
 }
 
 #ifdef CONFIG_SCHED_DEBUG_TRACE
-static void snprintf_dgl(char* buf, size_t bsz, struct litmus_lock* dgl_locks[], int sz)
+static void snprintf_dgl(char* buf, size_t bsz, struct litmus_lock* dgl_locks[],
+				int sz)
 {
 	int i;
 	char* ptr;
 
 	ptr = buf;
-	for(i = 0; i < sz && ptr < buf+bsz; ++i)
-	{
+	for(i = 0; i < sz && ptr < buf+bsz; ++i) {
 		struct litmus_lock *l = dgl_locks[i];
 		int remaining = bsz - (ptr-buf);
 		int written;
@@ -402,15 +404,15 @@ static void snprintf_dgl(char* buf, size_t bsz, struct litmus_lock* dgl_locks[],
 
 /* only valid when locks are prioq locks!!!
  * THE BIG DGL LOCK MUST BE HELD! */
-int __attempt_atomic_dgl_acquire(struct litmus_lock *cur_lock, dgl_wait_state_t *dgl_wait)
+int __attempt_atomic_dgl_acquire(struct litmus_lock *cur_lock,
+				dgl_wait_state_t *dgl_wait)
 {
 	int i;
 
 	/* check to see if we can take all the locks */
 	for(i = 0; i < dgl_wait->size; ++i) {
 		struct litmus_lock *l = dgl_wait->locks[i];
-		if(!l->ops->dgl_can_quick_lock(l, dgl_wait->task))
-		{
+		if(!l->ops->dgl_can_quick_lock(l, dgl_wait->task)) {
 			return -1;
 		}
 	}
@@ -418,7 +420,8 @@ int __attempt_atomic_dgl_acquire(struct litmus_lock *cur_lock, dgl_wait_state_t 
 	/* take the locks */
 	for(i = 0; i < dgl_wait->size; ++i) {
 		struct litmus_lock *l = dgl_wait->locks[i];
-		l->ops->dgl_quick_lock(l, cur_lock, dgl_wait->task, &dgl_wait->wq_nodes[i]);
+		l->ops->dgl_quick_lock(l, cur_lock, dgl_wait->task,
+						&dgl_wait->wq_nodes[i]);
 
 		sched_trace_lock(dgl_wait->task, l->ident, 1);
 
@@ -453,11 +456,12 @@ static long do_litmus_dgl_lock(dgl_wait_state_t *dgl_wait)
 	local_irq_save(kludge_flags);
 	raw_spin_lock_irqsave(dgl_lock, irqflags);
 
-	// try to acquire each lock.  enqueue (non-blocking) if it is unavailable.
+	/* Try to acquire each lock. Enqueue (non-blocking) if it is unavailable. */
 	for(i = 0; i < dgl_wait->size; ++i) {
 		struct litmus_lock *tmp = dgl_wait->locks[i];
 
-		// dgl_lock() must set task state to TASK_UNINTERRUPTIBLE if task blocks.
+		/* dgl_lock() must set task state to TASK_UNINTERRUPTIBLE
+		   if task blocks. */
 
 		if(tmp->ops->dgl_lock(tmp, dgl_wait, &dgl_wait->wq_nodes[i])) {
 			sched_trace_lock(dgl_wait->task, tmp->ident, 1);
@@ -467,7 +471,7 @@ static long do_litmus_dgl_lock(dgl_wait_state_t *dgl_wait)
 	}
 
 	if(dgl_wait->nr_remaining == 0) {
-		// acquired entire group immediatly
+		/* acquired entire group immediatly */
 		TRACE_CUR("Acquired all locks in DGL immediatly!\n");
 		raw_spin_unlock_irqrestore(dgl_lock, irqflags);
 		local_irq_restore(kludge_flags);
@@ -486,7 +490,8 @@ static long do_litmus_dgl_lock(dgl_wait_state_t *dgl_wait)
 
 		TS_DGL_LOCK_SUSPEND;
 
-		raw_spin_unlock_irqrestore(dgl_lock, irqflags);  // free dgl_lock before suspending
+		/* free dgl_lock before suspending */
+		raw_spin_unlock_irqrestore(dgl_lock, irqflags);
 		flush_pending_wakes();
 		local_irq_restore(kludge_flags);
 		suspend_for_lock();
@@ -495,14 +500,6 @@ static long do_litmus_dgl_lock(dgl_wait_state_t *dgl_wait)
 
 		TRACE_CUR("Woken up from DGL suspension.\n");
 	}
-
-#if 0
-	/* FOR SANITY CHECK FOR TESTING */
-	for(i = 0; i < dgl_wait->size; ++i) {
-		struct litmus_lock *tmp = dgl_wait->locks[i];
-		BUG_ON(!tmp->ops->is_owner(tmp, dgl_wait->task));
-	}
-#endif
 
 	TRACE_CUR("Acquired entire DGL\n");
 
@@ -564,16 +561,17 @@ static long do_litmus_dgl_atomic_lock(dgl_wait_state_t *dgl_wait)
 
 		TS_DGL_LOCK_SUSPEND;
 
-		raw_spin_unlock_irqrestore(dgl_lock, irqflags);  // free dgl_lock before suspending
+		/* free dgl_lock before suspending */
+		raw_spin_unlock_irqrestore(dgl_lock, irqflags);
 		flush_pending_wakes();
 		local_irq_restore(kludge_flags);
-		suspend_for_lock(); // suspend!!!
+		suspend_for_lock();
 
 		TS_DGL_LOCK_RESUME;
 
 		TRACE_CUR("Woken up from DGL suspension.\n");
 
-		goto all_acquired;  // we should hold all locks when we wake up.
+		goto all_acquired;  /* we should hold all locks when we wake up. */
 	}
 	raw_spin_unlock_irqrestore(dgl_lock, irqflags);
 	flush_pending_wakes();
@@ -582,14 +580,6 @@ static long do_litmus_dgl_atomic_lock(dgl_wait_state_t *dgl_wait)
 all_acquired:
 
 	dgl_wait->nr_remaining = 0;
-
-#if 0
-	/* SANITY CHECK FOR TESTING */
-	for(i = 0; i < dgl_wait->size; ++i) {
-		struct litmus_lock *tmp = dgl_wait->locks[i];
-		BUG_ON(!tmp->ops->is_owner(tmp, dgl_wait->task));
-	}
-#endif
 
 	TRACE_CUR("Acquired entire DGL\n");
 
@@ -625,7 +615,9 @@ asmlinkage long sys_litmus_dgl_lock(void* __user usr_dgl_ods, int dgl_size)
 	else {
 		int i;
 		int num_need_atomic = 0;
-		dgl_wait_state_t dgl_wait_state;  // lives on the stack until all resources in DGL are held.
+
+		/* lives on the stack until all resources in DGL are held. */
+		dgl_wait_state_t dgl_wait_state;
 
 		init_dgl_wait_state(&dgl_wait_state);
 
@@ -634,8 +626,9 @@ asmlinkage long sys_litmus_dgl_lock(void* __user usr_dgl_ods, int dgl_size)
 			if(entry && is_lock(entry)) {
 				dgl_wait_state.locks[i] = get_lock(entry);
 				if(!dgl_wait_state.locks[i]->ops->supports_dgl) {
-					TRACE_CUR("Lock %d does not support all required DGL operations.\n",
-							  dgl_wait_state.locks[i]->ident);
+					TRACE_CUR("Lock %d does not support all required "
+							"DGL operations.\n",
+							 dgl_wait_state.locks[i]->ident);
 					goto out;
 				}
 
@@ -650,7 +643,8 @@ asmlinkage long sys_litmus_dgl_lock(void* __user usr_dgl_ods, int dgl_size)
 		}
 
 		if (num_need_atomic && num_need_atomic != dgl_size) {
-			TRACE_CUR("All locks in DGL must support atomic acquire if any one does.\n");
+			TRACE_CUR("All locks in DGL must support atomic "
+					"acquire if any one does.\n");
 			goto out;
 		}
 
@@ -687,7 +681,7 @@ static long do_litmus_dgl_unlock(struct litmus_lock* dgl_locks[], int dgl_size)
 #endif
 
 	local_irq_save(flags);
-	for(i = dgl_size - 1; i >= 0; --i) {  // unlock in reverse order
+	for(i = dgl_size - 1; i >= 0; --i) {  /* unlock in reverse order */
 
 		struct litmus_lock *l = dgl_locks[i];
 		long tmp_err;
@@ -698,7 +692,8 @@ static long do_litmus_dgl_unlock(struct litmus_lock* dgl_locks[], int dgl_size)
 		sched_trace_lock(current, l->ident, 0);
 
 		if(tmp_err) {
-			TRACE_CUR("There was an error unlocking %d: %d.\n", l->ident, tmp_err);
+			TRACE_CUR("There was an error unlocking %d: %d.\n",
+							l->ident, tmp_err);
 			err = tmp_err;
 		}
 	}
@@ -738,8 +733,9 @@ asmlinkage long sys_litmus_dgl_unlock(void* __user usr_dgl_ods, int dgl_size)
 			if(entry && is_lock(entry)) {
 				dgl_locks[i] = get_lock(entry);
 				if(!dgl_locks[i]->ops->supports_dgl) {
-					TRACE_CUR("Lock %d does not support all required DGL operations.\n",
-							  dgl_locks[i]->ident);
+					TRACE_CUR("Lock %d does not support all required "
+							"DGL operations.\n",
+							dgl_locks[i]->ident);
 					goto out;
 				}
 			}
@@ -761,8 +757,8 @@ out:
 	return err;
 }
 
-
-asmlinkage long sys_litmus_dgl_should_yield_lock(void* __user usr_dgl_ods, int dgl_size)
+asmlinkage long sys_litmus_dgl_should_yield_lock(void* __user usr_dgl_ods,
+				int dgl_size)
 {
 	long err = -EINVAL;
 	int dgl_ods[MAX_DGL_SIZE];
@@ -794,7 +790,8 @@ asmlinkage long sys_litmus_dgl_should_yield_lock(void* __user usr_dgl_ods, int d
 			if (entry && is_lock(entry)) {
 				struct litmus_lock *l = get_lock(entry);
 				if (l->ops->should_yield_lock) {
-					TRACE_CUR("Checking to see if should yield lock %d\n", l->ident);
+					TRACE_CUR("Checking to see if should yield lock %d\n",
+									l->ident);
 					err = l->ops->should_yield_lock(l);
 				}
 				else {
@@ -827,7 +824,8 @@ asmlinkage long sys_litmus_dgl_unlock(void* __user usr_dgl_ods, int dgl_size)
 	return -ENOSYS;
 }
 
-asmlinkage long sys_litmus_dgl_should_yield_lock(void* __user usr_dgl_ods, int dgl_size)
+asmlinkage long sys_litmus_dgl_should_yield_lock(void* __user usr_dgl_ods,
+				int dgl_size)
 {
 	return -ENOSYS;
 }
@@ -880,8 +878,7 @@ void suspend_for_lock(void)
 
 #if defined(CONFIG_LITMUS_AFFINITY_LOCKING) && defined(CONFIG_LITMUS_NVIDIA)
 	/* disable tracking */
-	if(tsk_rt(t)->held_gpus)
-	{
+	if(tsk_rt(t)->held_gpus) {
 		/* tracking is actually stopped in schedule(), where it
 		   is also stopped upon preemption */
 		tsk_rt(t)->suspend_gpu_tracker_on_block = 1;
@@ -914,8 +911,7 @@ DEFINE_PER_CPU(wake_queue_t, wqueues);
 void init_wake_queues()
 {
 	int cpu = 0;
-	for_each_online_cpu(cpu)
-	{
+	for_each_online_cpu(cpu) {
 		wake_queue_t *q = &per_cpu(wqueues, cpu);
 		memset(q, 0, sizeof(*q));
 	}
@@ -944,8 +940,7 @@ int flush_pending_wakes()
 	wake_queue_t *q;
 
 	q = &per_cpu(wqueues, smp_processor_id());
-	for(i = 0; i < q->count; ++i)
-	{
+	for(i = 0; i < q->count; ++i) {
 		if (q->to_wake[i]) {
 			struct task_struct *t = q->to_wake[i];
 			q->to_wake[i] = NULL;

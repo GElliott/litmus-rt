@@ -93,7 +93,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 				TRACE_TASK(next,"descheduled. Proceeding.\n");
 
 			if (lt_before(_maybe_deadlock + 1000000000L,
-				      litmus_clock())) {
+					  litmus_clock())) {
 				/* We've been spinning for 1s.
 				 * Something can't be right!
 				 * Let's abandon the task and bail out; at least
@@ -138,8 +138,6 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			}
 		}
 
-		set_task_cpu(next, smp_processor_id());
-
 		/* DEBUG: now that we have the lock we need to make sure a
 		 *  couple of things still hold:
 		 *  - it is still a real-time task
@@ -147,7 +145,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		 * If either is violated, then the active plugin is
 		 * doing something wrong.
 		 */
-		if (!is_realtime(next) || !is_running(next)) {
+		if (unlikely(!is_realtime(next) || !is_running(next))) {
 			/* BAD BAD BAD */
 			TRACE_TASK(next,"BAD: migration invariant FAILED: "
 				   "rt=%d running=%d\n",
@@ -156,6 +154,10 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			/* drop the task */
 			next = NULL;
 		}
+		else {
+			set_task_cpu(next, smp_processor_id());
+		}
+
 		/* release the other CPU's runqueue, but keep ours */
 		raw_spin_unlock(&other_rq->lock);
 	}
@@ -168,10 +170,69 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		next->rt_param.stack_in_use = 0;
 #endif
 		next->se.exec_start = rq->clock;
+
+		if (is_realtime(next)) {
+			budget_state_machine(next, on_scheduled);
+
+#ifdef CONFIG_LITMUS_AFFINITY_AWARE_GPU_ASSINGMENT
+			/* turn GPU tracking back on if needed */
+			if(tsk_rt(next)->held_gpus) {
+				if(0 == tsk_rt(next)->gpu_time_stamp) {
+					start_gpu_tracker(next);
+				}
+			}
+#endif
+		}
 	}
 
-	update_enforcement_timer(next);
 	return next;
+}
+
+void litmus_handle_budget_exhaustion(struct task_struct *t)
+{
+	/* We're unlikely to pick a task that has an exhausted budget, so this
+	 * provides a failsafe. */
+
+	/* BUG: Virtual unlock of OMLP-family locking protocols is not triggered.
+	 *
+	 * TODO-FIX: Add a new virtual-unlock call to budget state machine and do
+	 * the virtual unlock in plugin::schedule(), instead of in budget
+	 * timer handler. This bug should only be raised EXTREMELY infrequently.
+	 */
+
+	int handle_exhausion = 1;
+
+	BUG_ON(current != t);
+
+	if (is_np(t) && bt_flag_is_set(t, BTF_BUDGET_EXHAUSTED)) {
+		/* ignore. will handle exhausion in the future. */
+		TRACE_TASK(t, "Task is np and already flagged as exhausted. "
+					"Allow scheduling.\n");
+		return;
+	}
+
+	if (unlikely(bt_flag_is_set(t, BTF_WAITING_FOR_RELEASE))) {
+		TRACE_TASK(t, "Waiting for release. Skipping exhaustion.\n");
+		return;
+	}
+
+	if (budget_precisely_tracked(t)) {
+		if (cancel_enforcement_timer(t) < 0) {
+			TRACE_TASK(t, "schedule() raced with timer. Deferring to timer.\n");
+			handle_exhausion = 0;
+		}
+	}
+
+	if (handle_exhausion) {
+		if (likely(!is_np(t))) {
+			TRACE_TASK(t, "picked task without budget => FORCE_RESCHED.\n");
+			litmus_reschedule_local();
+		}
+		else if (is_user_np(t)) {
+			TRACE_TASK(t, "is non-preemptable, preemption delayed.\n");
+			request_exit_np(t);
+		}
+	}
 }
 
 static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
@@ -187,7 +248,7 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		 * state already here.
 		 *
 		 * WARNING: this needs to be re-evaluated when porting
-		 *          to newer kernel versions.
+		 *		  to newer kernel versions.
 		 */
 		p->state = TASK_RUNNING;
 		litmus->task_wake_up(p);
@@ -340,7 +401,7 @@ const struct sched_class litmus_sched_class = {
 	.pre_schedule		= pre_schedule_litmus,
 #endif
 
-	.set_curr_task          = set_curr_task_litmus,
+	.set_curr_task		 = set_curr_task_litmus,
 	.task_tick		= task_tick_litmus,
 
 	.get_rr_interval	= get_rr_interval_litmus,

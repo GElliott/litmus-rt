@@ -33,6 +33,23 @@ typedef enum {
 	PRECISE_ENFORCEMENT  /* budgets are enforced with hrtimers */
 } budget_policy_t;
 
+/* budget draining policy (ignored if neither budget enforcement nor
+   signalling are used). */
+typedef enum {
+	DRAIN_SIMPLE,	/* drains while task is linked */
+	DRAIN_SIMPLE_IO, /* drains while task is linked or blocked
+						(not waiting for Litmus lock) */
+	DRAIN_SAWARE,	/* drains according to suspension-aware analysis */
+	DRAIN_SOBLIV	/* drains according to suspension-obliv analysis */
+} budget_drain_policy_t;
+
+/* signal policy for budget exhaustion */
+typedef enum {
+	NO_SIGNALS,		/* job receives no signals when it exhausts its budget */
+	QUANTUM_SIGNALS, /*budget signals are only sent on quantum boundaries */
+	PRECISE_SIGNALS	/* budget signals are triggered with hrtimers */
+} budget_signal_policy_t;
+
 /* Release behaviors for jobs. PERIODIC and EARLY jobs
    must end by calling sys_complete_job() (or equivalent)
    to set up their next release and deadline. */
@@ -90,6 +107,8 @@ struct rt_task {
 	unsigned int	priority;
 	task_class_t	cls;
 	budget_policy_t  budget_policy;  /* ignored by pfair */
+	budget_drain_policy_t drain_policy;
+	budget_signal_policy_t budget_signal_policy; /* ignored by pfair */
 	release_policy_t release_policy;
 };
 
@@ -171,6 +190,7 @@ struct control_page {
 
 #include <linux/semaphore.h>
 #include <litmus/binheap.h>
+#include <litmus/budget.h>
 
 #ifdef CONFIG_LITMUS_SOFTIRQD
 #include <linux/interrupt.h>
@@ -263,6 +283,19 @@ struct rt_job {
 	 * Increase this sequence number when a job is released.
 	 */
 	unsigned int    job_no;
+
+	/* Increments each time a job is forced to complete by budget exhaustion.
+	 * If a job completes without remaining budget, the next ob will be early-
+	 * released __without__ pushing back its deadline. job_backlog is
+	 * decremented once per early release. This behavior continues until
+	 * backlog == 0.
+	 */
+	unsigned int	backlog;
+
+	/* Denotes if the current job is a backlogged job that was early released
+	 * due to budget enforcement behaviors.
+	 */
+	unsigned int	is_backlogged_job:1;
 };
 
 struct pfair_param;
@@ -344,6 +377,8 @@ struct rt_param {
 	unsigned int		sporadic_release:1;
 	lt_t			sporadic_release_time;
 
+	/* budget tracking/enforcement method and data assigned to this task */
+	struct budget_tracker	budget;
 
 	/* task representing the current "inherited" task
 	 * priority, assigned by inherit_priority and
@@ -352,6 +387,17 @@ struct rt_param {
 	 * an increased task priority.
 	 */
 	 struct task_struct*	inh_task;
+
+	 /* budget enforcement methods may require knowledge of tasks that
+	  * inherit this task's priority. There may be more than one such
+	  * task w/ priority inheritance chains.
+	  */
+	 int	inh_task_linkback_idx;	/* idx in inh_task's
+									   inh_task_linkbacks array. */
+
+	 struct task_struct** inh_task_linkbacks; /* array w/ BITS_PER_LONG elm */
+	 unsigned long	used_linkback_slots;  /* nr used slots
+											 in inh_task_linkbacks */
 
 #ifdef CONFIG_NP_SECTION
 	/* For the FMLP under PSN-EDF, it is required to make the task
@@ -426,17 +472,19 @@ struct rt_param {
 #endif /* end LITMUS_SOFTIRQD */
 
 #ifdef CONFIG_REALTIME_AUX_TASKS
+	/* Real-time data for auxiliary tasks */
+	struct list_head	aux_task_node;
+	struct binheap_node	aux_task_owner_node;
+
 	unsigned int	is_aux_task:1;
 	unsigned int	aux_ready:1;
 	unsigned int	has_aux_tasks:1;
 	unsigned int	hide_from_aux_tasks:1;
-
-	struct list_head	aux_task_node;
-	struct binheap_node	aux_task_owner_node;
 #endif
 };
 
 #ifdef CONFIG_REALTIME_AUX_TASKS
+/* Auxiliary task data. Appears in task_struct, like rt_param */
 struct aux_data {
 	struct list_head	aux_tasks;
 	struct binheap	aux_task_owners;

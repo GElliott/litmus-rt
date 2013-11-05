@@ -13,11 +13,9 @@ void setup_release(struct task_struct *t, lt_t release)
 	t->rt_param.job_params.deadline = release + get_rt_relative_deadline(t);
 	t->rt_param.job_params.exec_time = 0;
 
-#if 0 /* PORT CHECK */
-	/* kludge - TODO: Move this to budget.h/.c */
+	/* TODO: Move this to budget.h/.c */
 	if (t->rt_param.budget.ops)
 		bt_flags_reset(t);
-#endif
 
 	/* update job sequence number */
 	t->rt_param.job_params.job_no++;

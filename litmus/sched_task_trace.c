@@ -191,10 +191,10 @@ feather_callback void do_sched_trace_task_completion(unsigned long id,
 	struct st_event_record* rec = get_record(ST_COMPLETION, t);
 	if (rec) {
 		rec->data.completion.when   = now();
-#if 0
-		rec->data.completion.backlog_remaining = tsk_rt(t)->job_params.backlog;
-		rec->data.completion.was_backlog_job = tsk_rt(t)->job_params.is_backlogged_job;
-#endif
+		rec->data.completion.backlog_remaining =
+				tsk_rt(t)->job_params.backlog;
+		rec->data.completion.was_backlog_job =
+				tsk_rt(t)->job_params.is_backlogged_job;
 		rec->data.completion.forced = forced;
 		put_record(rec);
 	}
@@ -208,8 +208,9 @@ feather_callback void do_sched_trace_task_block(unsigned long id,
 	if (rec) {
 		rec->data.block.when      = now();
 
-		// hiding is turned on by locking protocols, so if there isn't any
-		// hiding, then we're blocking for some other reason.  assume it's I/O.
+		/* Hiding is turned on by locking protocols, so if there isn't any
+		   hiding, then we're blocking for some other reason: assume
+		   it's I/O. */
 		rec->data.block.for_io  = !tsk_rt(t)->blocked_lock || (0
 #ifdef CONFIG_REALTIME_AUX_TASKS
 			|| (tsk_rt(t)->has_aux_tasks && !tsk_rt(t)->hide_from_aux_tasks)

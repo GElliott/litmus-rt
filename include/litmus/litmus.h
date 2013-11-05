@@ -68,15 +68,58 @@ void litmus_do_exit(struct task_struct *tsk);
 #define get_priority(t) 	(tsk_rt(t)->task_params.priority)
 #define get_class(t)        (tsk_rt(t)->task_params.cls)
 #define get_release_policy(t) (tsk_rt(t)->task_params.release_policy)
+#define get_drain_policy(t) (tsk_rt(t)->task_params.drain_policy)
 
 /* job_param macros */
 #define get_exec_time(t)    (tsk_rt(t)->job_params.exec_time)
 #define get_deadline(t)		(tsk_rt(t)->job_params.deadline)
 #define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_lateness(t)		(tsk_rt(t)->job_params.lateness)
+#define get_backlog(t)		(tsk_rt(t)->job_params.backlog)
 
 #define effective_priority(t) ((!(tsk_rt(t)->inh_task)) ? t : tsk_rt(t)->inh_task)
 #define base_priority(t) (t)
+
+/* budget-related functions and macros */
+
+inline static int budget_exhausted(struct task_struct* t) {
+	return get_exec_time(t) >= get_exec_cost(t);
+}
+
+inline static int budget_remaining(struct task_struct* t) {
+	return (!budget_exhausted(t)) ? (get_exec_cost(t) - get_exec_time(t)) : 0;
+}
+
+#define has_backlog(t)		(get_backlog(t) != 0)
+#define get_budget_timer(t)	(tsk_rt(t)->budget)
+#define budget_enforced(t) (\
+	tsk_rt(t)->task_params.budget_policy != NO_ENFORCEMENT)
+#define budget_precisely_tracked(t) (\
+	tsk_rt(t)->task_params.budget_policy == PRECISE_ENFORCEMENT || \
+	tsk_rt(t)->task_params.budget_signal_policy == PRECISE_SIGNALS)
+#define budget_quantum_tracked(t) (\
+	tsk_rt(t)->task_params.budget_policy == QUANTUM_ENFORCEMENT || \
+	tsk_rt(t)->task_params.budget_signal_policy == QUANTUM_SIGNALS)
+#define budget_signalled(t) (\
+	tsk_rt(t)->task_params.budget_signal_policy != NO_SIGNALS)
+#define budget_precisely_signalled(t) (\
+	tsk_rt(t)->task_params.budget_policy == PRECISE_SIGNALS)
+#define bt_flag_is_set(t, flag_nr) (\
+	test_bit(flag_nr, &tsk_rt(t)->budget.flags))
+#define bt_flag_test_and_set(t, flag_nr) (\
+	test_and_set_bit(flag_nr, &tsk_rt(t)->budget.flags))
+#define bt_flag_test_and_clear(t, flag_nr) (\
+	test_and_clear_bit(flag_nr, &tsk_rt(t)->budget.flags))
+#define bt_flag_set(t, flag_nr) (\
+	set_bit(flag_nr, &tsk_rt(t)->budget.flags))
+#define bt_flag_clear(t, flag_nr) (\
+	clear_bit(flag_nr, &tsk_rt(t)->budget.flags))
+#define bt_flags_reset(t) (\
+	tsk_rt(t)->budget.flags = 0)
+//#define should_requeue_preempted_job(t)
+#define requeue_preempted_job(t) \
+	(t && !is_completed(t) && !tsk_rt(t)->dont_requeue && \
+	 (!budget_exhausted(t) || !budget_enforced(t)))
 
 /* release policy macros */
 #define is_periodic(t)		(get_release_policy(t) == TASK_PERIODIC)

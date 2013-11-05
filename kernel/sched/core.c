@@ -92,6 +92,7 @@
 #include <litmus/sched_plugin.h>
 
 void litmus_tick(struct rq*, struct task_struct*);
+void litmus_handle_budget_exhaustion(struct task_struct*);
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -3106,6 +3107,11 @@ litmus_need_resched_nonpreemptible:
 	sched_trace_task_switch_to(current);
 
 	post_schedule(rq);
+
+	if (is_realtime(current) &&
+		unlikely(budget_enforced(current) && budget_exhausted(current))) {
+		litmus_handle_budget_exhaustion(current);
+	}
 
 	if (sched_state_validate_switch()) {
 		TS_SCHED2_END(prev);

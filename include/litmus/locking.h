@@ -280,4 +280,8 @@ void init_wake_queues(void);
 	 !binheap_empty(&tsk_rt(t)->hp_blocked_tasks))
 #endif
 
+void set_inh_task_linkback(struct task_struct* t, struct task_struct* linkto);
+void clear_inh_task_linkback(struct task_struct* t,
+				struct task_struct* linkedto);
+
 #endif

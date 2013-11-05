@@ -35,10 +35,8 @@ static int admit_aux_task(struct task_struct *t)
 		.priority = LITMUS_LOWEST_PRIORITY,
 		.cls = RT_CLASS_BEST_EFFORT,
 		.budget_policy = QUANTUM_ENFORCEMENT,
-#if 0 /* PORT RECHECK */
 		.drain_policy = DRAIN_SIMPLE,
 		.budget_signal_policy = NO_SIGNALS,
-#endif
 		/* use SPORADIC instead of EARLY since util = 1.0 */
 		.release_policy = TASK_SPORADIC,
 	};

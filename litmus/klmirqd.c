@@ -286,10 +286,8 @@ static int become_litmus_daemon(struct task_struct* tsk)
 		.priority = LITMUS_LOWEST_PRIORITY,
 		.cls = RT_CLASS_BEST_EFFORT,
 		.budget_policy = NO_ENFORCEMENT,
-#if 0 /* PORT RECHECK */
 		.drain_policy = DRAIN_SIMPLE,
 		.budget_signal_policy = NO_SIGNALS,
-#endif
 		/* use SPORADIC instead of EARLY since util = 1.0 */
 		.release_policy = TASK_SPORADIC,
 	};

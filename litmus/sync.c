@@ -13,9 +13,7 @@
 #include <litmus/jobs.h>
 
 #include <litmus/sched_trace.h>
-#if 0 /* PORT RECHECK */
 #include <litmus/budget.h>
-#endif
 
 struct ts_release_wait {
 	struct list_head list;
@@ -58,19 +56,15 @@ static long do_wait_for_ts_release(struct timespec *wake)
 #if defined(CONFIG_REALTIME_AUX_TASKS) || defined(CONFIG_LITMUS_NVIDIA)
 		hide_from_workers(t, &vis_flags);
 #endif
-#if 0 /* PORT RECHECK */
 		bt_flag_set(t, BTF_WAITING_FOR_RELEASE);
 		mb();
-		budget_state_machine(t,on_exit); // do this here and not in schedule()?
-#endif
+		budget_state_machine(t, on_exit); /* TODO: maybe call in schedule() */
 	}
 
 	TRACE_TASK(t, "waiting for ts release.\n");
 
-#if 0 /* PORT RECHECK */
 	if (is_rt)
 		BUG_ON(!bt_flag_is_set(t, BTF_WAITING_FOR_RELEASE));
-#endif
 
 	/* We are enqueued, now we wait for someone to wake us up. */
 	ret = wait_for_completion_interruptible(&wait.completion);
@@ -78,9 +72,7 @@ static long do_wait_for_ts_release(struct timespec *wake)
 	TRACE_TASK(t, "released by ts release!\n");
 
 	if (is_rt) {
-#if 0 /* PORT RECHECK */
 		bt_flag_clear(t, BTF_WAITING_FOR_RELEASE);
-#endif
 #if defined(CONFIG_REALTIME_AUX_TASKS) || defined(CONFIG_LITMUS_NVIDIA)
 		show_to_workers(t, &vis_flags);
 #endif
@@ -102,13 +94,11 @@ static long do_wait_for_ts_release(struct timespec *wake)
 			 */
 			tsk_rt(current)->dont_requeue = 1;
 			tsk_rt(t)->completed = 1;
-#if 0 /* PORT RECHECK */
 			tsk_rt(t)->job_params.backlog = 0;
 			tsk_rt(t)->job_params.is_backlogged_job = 0;
 			tsk_rt(t)->budget.suspend_timestamp = 0;
 			bt_flag_clear(t, BTF_BUDGET_EXHAUSTED);
 			mb();
-#endif
 
 			/* completion succeeded, set up release. subtract off
 			 * period because schedule()->job_completion() will

@@ -956,6 +956,77 @@ int flush_pending_wakes()
 	return count;
 }
 
+void set_inh_task_linkback(struct task_struct* t, struct task_struct* linkto)
+{
+    const int MAX_IDX = BITS_PER_LONG - 1;
+
+    int success = 0;
+    int old_idx = tsk_rt(t)->inh_task_linkback_idx;
+
+    /* is the linkback already set? */
+    if (old_idx >= 0 && old_idx <= MAX_IDX) {
+        if ((BIT_MASK(old_idx) & tsk_rt(linkto)->used_linkback_slots) &&
+            (tsk_rt(linkto)->inh_task_linkbacks[old_idx] == t)) {
+            TRACE_TASK(t, "linkback is current.\n");
+            return;
+        }
+        BUG();
+    }
+
+    /* kludge: upper limit on num linkbacks */
+    BUG_ON(tsk_rt(linkto)->used_linkback_slots == ~0ul);
+
+    while(!success) {
+        int b = find_first_zero_bit(&tsk_rt(linkto)->used_linkback_slots,
+                    BITS_PER_BYTE*sizeof(tsk_rt(linkto)->used_linkback_slots));
+
+        BUG_ON(b > MAX_IDX);
+
+        /* set bit... */
+        if (!test_and_set_bit(b, &tsk_rt(linkto)->used_linkback_slots)) {
+            TRACE_TASK(t, "linking back to %s/%d in slot %d\n",
+							linkto->comm, linkto->pid, b);
+            if (tsk_rt(linkto)->inh_task_linkbacks[b])
+                TRACE_TASK(t, "%s/%d already has %s/%d in slot %d\n",
+                           linkto->comm, linkto->pid,
+                           tsk_rt(linkto)->inh_task_linkbacks[b]->comm,
+                           tsk_rt(linkto)->inh_task_linkbacks[b]->pid,
+                           b);
+
+            /* TODO: allow dirty data to remain in [b] after code is tested */
+            BUG_ON(tsk_rt(linkto)->inh_task_linkbacks[b] != NULL);
+            /* ...before setting slot */
+            tsk_rt(linkto)->inh_task_linkbacks[b] = t;
+            tsk_rt(t)->inh_task_linkback_idx = b;
+            success = 1;
+        }
+    }
+}
+
+void clear_inh_task_linkback(struct task_struct* t,
+				struct task_struct* linkedto)
+{
+    const int MAX_IDX = BITS_PER_LONG - 1;
+
+    int success = 0;
+    int slot = tsk_rt(t)->inh_task_linkback_idx;
+
+    if (slot < 0) {
+        TRACE_TASK(t, "assuming linkback already cleared.\n");
+        return;
+    }
+
+    BUG_ON(slot > MAX_IDX);
+    BUG_ON(tsk_rt(linkedto)->inh_task_linkbacks[slot] != t);
+
+    /* be safe - clear slot before clearing the bit */
+    tsk_rt(t)->inh_task_linkback_idx = -1;
+    tsk_rt(linkedto)->inh_task_linkbacks[slot] = NULL;
+
+    success = test_and_clear_bit(slot, &tsk_rt(linkedto)->used_linkback_slots);
+
+    BUG_ON(!success);
+}
 
 #else  /* CONFIG_LITMUS_LOCKING */
 

@@ -246,7 +246,6 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 	}
 }
 
-#if 0 /* PORT RECHECK */
 feather_callback void do_sched_trace_action(unsigned long id,
 				unsigned long _task,
 				unsigned long action)
@@ -260,7 +259,6 @@ feather_callback void do_sched_trace_action(unsigned long id,
 		put_record(rec);
 	}
 }
-#endif
 
 feather_callback void do_sched_trace_migration(unsigned long id,
 				unsigned long _task,

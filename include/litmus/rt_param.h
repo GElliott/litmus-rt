@@ -185,6 +185,46 @@ struct control_page {
 #define LITMUS_CP_OFFSET_TS_SC_START	16
 #define LITMUS_CP_OFFSET_IRQ_SC_START	24
 
+
+/* sched trace event injection */
+/* mirror of st_event_record_type_t
+ * Assume all are UNsupported, unless otherwise stated. */
+typedef enum {
+	ST_INJECT_NAME = 1,             /* supported */
+	ST_INJECT_PARAM,                /* supported */
+	ST_INJECT_RELEASE,              /* supported */
+	ST_INJECT_ASSIGNED,
+	ST_INJECT_SWITCH_TO,
+	ST_INJECT_SWITCH_AWAY,
+	ST_INJECT_COMPLETION,           /* supported */
+	ST_INJECT_BLOCK,
+	ST_INJECT_RESUME,
+	ST_INJECT_ACTION,               /* supported */
+	ST_INJECT_SYS_RELEASE,          /* supported */
+
+	ST_INJECT_MIGRATION = 21,       /* supported */
+} sched_trace_injection_events_t;
+
+struct st_inject_args {
+	union {
+		/* ST_INJECT_RELEASE, ST_INJECT_COMPLETION */
+		struct {
+			lt_t release;
+			lt_t deadline;
+			unsigned int job_no;
+		};
+
+		/* ST_INJECT_ACTION */
+		unsigned int action;
+
+		/* ST_INJECT_MIGRATION */
+		struct {
+			unsigned int from;
+			unsigned int to; 
+		};
+	};
+};
+
 /* don't export internal data structures to user space (liblitmus) */
 #ifdef __KERNEL__
 
@@ -464,7 +504,7 @@ struct rt_param {
 
 #ifdef CONFIG_LITMUS_SOFTIRQD
 	/* proxy threads have minimum priority by default */
-	unsigned int        is_interrupt_thread:1;
+	unsigned int	is_interrupt_thread:1;
 
 	/* pointer to data used by klmirqd thread.
 	   valid only if ptr only valid if is_interrupt_thread == 1 */

@@ -402,6 +402,7 @@ int is_nvidia_func(void* func_addr)
 
 	return(ret);
 }
+EXPORT_SYMBOL(is_nvidia_func);
 
 int nv_schedule_work(struct work_struct *work)
 {
@@ -413,6 +414,7 @@ int nv_schedule_work(struct work_struct *work)
 	/* default to linux handler */
 	return queue_work(system_wq, work);
 }
+EXPORT_SYMBOL(nv_schedule_work);
 
 void nv_tasklet_schedule(struct tasklet_struct *t)
 {
@@ -427,6 +429,7 @@ void nv_tasklet_schedule(struct tasklet_struct *t)
 	/* default to linux handler */
 	___tasklet_schedule(t);
 }
+EXPORT_SYMBOL(nv_tasklet_schedule);
 
 void nv_tasklet_hi_schedule(struct tasklet_struct *t)
 {
@@ -441,6 +444,7 @@ void nv_tasklet_hi_schedule(struct tasklet_struct *t)
 	/* default to linux handler */
 	___tasklet_hi_schedule(t);
 }
+EXPORT_SYMBOL(nv_tasklet_hi_schedule);
 
 void nv_tasklet_hi_schedule_first(struct tasklet_struct *t)
 {
@@ -457,6 +461,7 @@ void nv_tasklet_hi_schedule_first(struct tasklet_struct *t)
 	/* default to linux handler */
 	___tasklet_hi_schedule_first(t);
 }
+EXPORT_SYMBOL(nv_tasklet_hi_schedule_first);
 
 u32 get_tasklet_nv_device_num(const struct tasklet_struct *t)
 {
@@ -656,7 +661,7 @@ static int create_threads(nv_device_registry_t* reg, int device)
 	status = launch_klmirqd_thread(name, default_cpu,
 								   &reg->workq_callback);
 	if(status != 0) {
-		TRACE("Failed to create nvklmworkqd thread for GPU %d\n", i);
+		TRACE("Failed to create nvklmworkqd thread for GPU %d\n", device);
 		--ret;
 	}
 #endif /* end LITMUS_NVIDIA_WORKQ_ON_DEDICATED */
@@ -1094,7 +1099,7 @@ long enable_gpu_owner(struct task_struct *t)
 		success = gpu_klmirqd_increase_priority(
 						reg->workq_thread, effective_priority(t));
 		if (success != 1)
-			reval = success;
+			retval = success;
 #endif /* end LITMUS_NVIDIA_WORKQ_ON_DEDICATED */
 	}
 #endif /* end LITMUS_SOFTIRQD */

@@ -10,6 +10,10 @@
 #include <litmus/sched_plugin.h>
 #include <litmus/preempt.h>
 
+#ifdef CONFIG_LITMUS_AFFINITY_AWARE_GPU_ASSINGMENT
+#include <litmus/gpu_affinity.h>
+#endif
+
 static void update_time_litmus(struct rq *rq, struct task_struct *p)
 {
 	u64 delta = rq->clock - p->se.exec_start;
@@ -173,14 +177,10 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 
 		if (is_realtime(next)) {
 			budget_state_machine(next, on_scheduled);
-
 #ifdef CONFIG_LITMUS_AFFINITY_AWARE_GPU_ASSINGMENT
 			/* turn GPU tracking back on if needed */
-			if(tsk_rt(next)->held_gpus) {
-				if(0 == tsk_rt(next)->gpu_time_stamp) {
-					start_gpu_tracker(next);
-				}
-			}
+			if(tsk_rt(next)->held_gpus && (0 == tsk_rt(next)->gpu_time_stamp))
+				start_gpu_tracker(next);
 #endif
 		}
 	}

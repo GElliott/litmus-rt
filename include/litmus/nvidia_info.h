@@ -1,8 +1,6 @@
 #ifndef __LITMUS_NVIDIA_H
 #define __LITMUS_NVIDIA_H
 
-#include <linux/interrupt.h>
-
 #ifdef CONFIG_LITMUS_SOFTIRQD
 #include <litmus/klmirqd.h>
 #endif
@@ -12,7 +10,6 @@
 /* TODO: Make this a function that checks the PCIe bus
    or maybe proc settings */
 #define num_online_gpus() (NV_DEVICE_NUM)
-
 
 /* Functions used for decoding NVIDIA blobs. */
 

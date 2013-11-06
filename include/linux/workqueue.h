@@ -13,10 +13,6 @@
 #include <linux/atomic.h>
 #include <linux/cpumask.h>
 
-#ifdef CONFIG_LITMUS_NVIDIA
-#include <litmus/nvidia_info.h>
-#endif
-
 struct workqueue_struct;
 
 struct work_struct;
@@ -529,7 +525,9 @@ static inline bool schedule_work_on(int cpu, struct work_struct *work)
 static inline bool schedule_work(struct work_struct *work)
 {
 #ifdef CONFIG_LITMUS_NVIDIA
-	if(unlikely(is_nvidia_func(work->func))
+	extern int is_nvidia_func(void*);
+	extern int nv_schedule_work(struct work_struct*);
+	if(unlikely(is_nvidia_func(work->func)))
 		return nv_schedule_work(work);
 #endif
 	return queue_work(system_wq, work);

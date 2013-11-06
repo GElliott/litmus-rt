@@ -1,8 +1,8 @@
 #ifndef __LITMUS_SOFTIRQ_H
 #define __LITMUS_SOFTIRQ_H
 
-#include <linux/interrupt.h>
 #include <linux/workqueue.h>
+#include <linux/interrupt.h>
 
 /*
    Threaded tasklet/workqueue handling for Litmus.

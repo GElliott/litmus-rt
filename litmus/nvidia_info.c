@@ -411,7 +411,7 @@ int nv_schedule_work(struct work_struct *work)
 		return 1;
 #endif
 	/* default to linux handler */
-	queue_work(system_wq, work);
+	return queue_work(system_wq, work);
 }
 
 void nv_tasklet_schedule(struct tasklet_struct *t)
@@ -792,7 +792,7 @@ static int shutdown_nv_device_reg(void)
 		TRACE("Shutting down GPU %d.\n", i);
 
 #ifdef CONFIG_LITMUS_SOFTIRQD
-		(void)destory_threads(&NV_DEVICE_REG[i], i);
+		(void)destroy_threads(&NV_DEVICE_REG[i], i);
 #endif
 		while (!binheap_empty(&NV_DEVICE_REG[i].owners)) {
 			binheap_delete_root(&NV_DEVICE_REG[i].owners,

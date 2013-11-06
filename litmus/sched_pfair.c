@@ -120,13 +120,13 @@ static inline struct pfair_cluster* from_domain(rt_domain_t* rt)
 	return container_of(rt, struct pfair_cluster, pfair);
 }
 
-static inline raw_spinlock_t* cluster_lock(struct pfair_cluster* cluster)
+static inline raw_readyq_spinlock_t* cluster_lock(struct pfair_cluster* cluster)
 {
 	/* The ready_lock is used to serialize all scheduling events. */
 	return &cluster->pfair.ready_lock;
 }
 
-static inline raw_spinlock_t* cpu_lock(struct pfair_state* state)
+static inline raw_readyq_spinlock_t* cpu_lock(struct pfair_state* state)
 {
 	return cluster_lock(cpu_cluster(state));
 }
@@ -456,7 +456,7 @@ static void schedule_next_quantum(struct pfair_cluster *cluster, quanta_t time)
 	/* called with interrupts disabled */
 	PTRACE("--- Q %lu at %llu PRE-SPIN\n",
 	       time, litmus_clock());
-	raw_spin_lock(cluster_lock(cluster));
+	raw_readyq_lock(cluster_lock(cluster));
 	PTRACE("<<< Q %lu at %llu\n",
 	       time, litmus_clock());
 
@@ -491,7 +491,7 @@ static void schedule_next_quantum(struct pfair_cluster *cluster, quanta_t time)
 	}
 	PTRACE(">>> Q %lu at %llu\n",
 	       time, litmus_clock());
-	raw_spin_unlock(cluster_lock(cluster));
+	raw_readyq_unlock(cluster_lock(cluster));
 }
 
 static noinline void wait_for_quantum(quanta_t q, struct pfair_state* state)
@@ -618,7 +618,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	}
 #endif
 
-	raw_spin_lock(cpu_lock(state));
+	raw_readyq_lock(cpu_lock(state));
 
 	blocks      = is_realtime(prev) && !is_running(prev);
 	completion  = is_realtime(prev) && is_completed(prev);
@@ -650,7 +650,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 			tsk_rt(next)->scheduled_on = cpu_id(state);
 	}
 	sched_state_task_picked();
-	raw_spin_unlock(cpu_lock(state));
+	raw_readyq_unlock(cpu_lock(state));
 
 	if (next)
 		TRACE_TASK(next, "scheduled rel=%lu at %lu (%llu)\n",
@@ -670,7 +670,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 
 	cluster = tsk_pfair(t)->cluster;
 
-	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
+	raw_readyq_lock_irqsave(cluster_lock(cluster), flags);
 
 	prepare_release(t, cluster->pfair_time + 1);
 
@@ -694,7 +694,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 
 	check_preempt(t);
 
-	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
+	raw_readyq_unlock_irqrestore(cluster_lock(cluster), flags);
 }
 
 static void pfair_task_wake_up(struct task_struct *t)
@@ -708,7 +708,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 	TRACE_TASK(t, "wakes at %llu, release=%lu, pfair_time:%lu\n",
 		   litmus_clock(), cur_release(t), cluster->pfair_time);
 
-	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
+	raw_readyq_lock_irqsave(cluster_lock(cluster), flags);
 
 	/* If a task blocks and wakes before its next job release,
 	 * then it may resume if it is currently linked somewhere
@@ -733,7 +733,7 @@ static void pfair_task_wake_up(struct task_struct *t)
 
 	check_preempt(t);
 
-	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
+	raw_readyq_unlock_irqrestore(cluster_lock(cluster), flags);
 	TRACE_TASK(t, "wake up done at %llu\n", litmus_clock());
 }
 
@@ -760,15 +760,37 @@ static void pfair_task_exit(struct task_struct * t)
 	 * might not be the same as the CPU that the PFAIR scheduler
 	 * has chosen for it.
 	 */
-	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
+	raw_readyq_lock_irqsave(cluster_lock(cluster), flags);
 
 	TRACE_TASK(t, "RIP, state:%d\n", t->state);
 	drop_all_references(t);
 
-	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);
+	raw_readyq_unlock_irqrestore(cluster_lock(cluster), flags);
 
 	kfree(t->rt_param.pfair);
 	t->rt_param.pfair = NULL;
+}
+
+static void pfair_release_at(struct task_struct* task, lt_t start)
+{
+	unsigned long flags;
+	quanta_t release;
+
+	struct pfair_cluster *cluster;
+
+	cluster = tsk_pfair(task)->cluster;
+
+	BUG_ON(!is_realtime(task));
+
+	raw_readyq_lock_irqsave(cluster_lock(cluster), flags);
+
+	release_at(task, start);
+	release = time2quanta(start, CEIL);
+	prepare_release(task, release);
+
+	TRACE_TASK(task, "sys release at %lu\n", release);
+
+	raw_readyq_unlock_irqrestore(cluster_lock(cluster), flags);
 }
 
 static void init_subtask(struct subtask* sub, unsigned long i,

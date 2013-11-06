@@ -352,12 +352,12 @@ static void cedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 	cedf_domain_t* cluster = container_of(rt, cedf_domain_t, domain);
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
+	raw_readyq_lock_irqsave(&cluster->cluster_lock, flags);
 
 	__merge_ready(&cluster->domain, tasks);
 	check_for_preemptions(cluster);
 
-	raw_spin_unlock_irqrestore(&cluster->cluster_lock, flags);
+	raw_readyq_unlock_irqrestore(&cluster->cluster_lock, flags);
 }
 
 /* caller holds cedf_lock */
@@ -448,7 +448,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	}
 #endif
 
-	raw_spin_lock(&cluster->cluster_lock);
+	raw_readyq_lock(&cluster->cluster_lock);
 	clear_will_schedule();
 
 	/* sanity checking */
@@ -532,7 +532,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 			next = prev;
 
 	sched_state_task_picked();
-	raw_spin_unlock(&cluster->cluster_lock);
+	raw_readyq_unlock(&cluster->cluster_lock);
 
 #ifdef WANT_ALL_SCHED_EVENTS
 	TRACE("cedf_lock released, next=0x%p\n", next);
@@ -574,7 +574,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	/* the cluster doesn't change even if t is scheduled */
 	cluster = task_cpu_cluster(t);
 
-	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
+	raw_readyq_lock_irqsave(&cluster->cluster_lock, flags);
 
 	/* setup job params */
 	release_at(t, litmus_clock());
@@ -602,7 +602,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 
 	if (is_running(t))
 		cedf_job_arrival(t);
-	raw_spin_unlock_irqrestore(&(cluster->cluster_lock), flags);
+	raw_readyq_unlock_irqrestore(&(cluster->cluster_lock), flags);
 }
 
 static void cedf_task_wake_up(struct task_struct *task)
@@ -615,7 +615,7 @@ static void cedf_task_wake_up(struct task_struct *task)
 
 	cluster = task_cpu_cluster(task);
 
-	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
+	raw_readyq_lock_irqsave(&cluster->cluster_lock, flags);
 	now = litmus_clock();
 	if (is_sporadic(task) && is_tardy(task, now)) {
 		/* new sporadic release */
@@ -623,7 +623,7 @@ static void cedf_task_wake_up(struct task_struct *task)
 		sched_trace_task_release(task);
 	}
 	cedf_job_arrival(task);
-	raw_spin_unlock_irqrestore(&cluster->cluster_lock, flags);
+	raw_readyq_unlock_irqrestore(&cluster->cluster_lock, flags);
 }
 
 static void cedf_task_block(struct task_struct *t)
@@ -636,9 +636,9 @@ static void cedf_task_block(struct task_struct *t)
 	cluster = task_cpu_cluster(t);
 
 	/* unlink if necessary */
-	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
+	raw_readyq_lock_irqsave(&cluster->cluster_lock, flags);
 	unlink(t);
-	raw_spin_unlock_irqrestore(&cluster->cluster_lock, flags);
+	raw_readyq_unlock_irqrestore(&cluster->cluster_lock, flags);
 
 	BUG_ON(!is_realtime(t));
 }
@@ -650,7 +650,7 @@ static void cedf_task_exit(struct task_struct * t)
 	cedf_domain_t *cluster = task_cpu_cluster(t);
 
 	/* unlink if necessary */
-	raw_spin_lock_irqsave(&cluster->cluster_lock, flags);
+	raw_readyq_lock_irqsave(&cluster->cluster_lock, flags);
 	unlink(t);
 	if (tsk_rt(t)->scheduled_on != NO_CPU) {
 		cpu_entry_t *cpu;
@@ -658,7 +658,7 @@ static void cedf_task_exit(struct task_struct * t)
 		cpu->scheduled = NULL;
 		tsk_rt(t)->scheduled_on = NO_CPU;
 	}
-	raw_spin_unlock_irqrestore(&cluster->cluster_lock, flags);
+	raw_readyq_unlock_irqrestore(&cluster->cluster_lock, flags);
 
 	BUG_ON(!is_realtime(t));
         TRACE_TASK(t, "RIP\n");

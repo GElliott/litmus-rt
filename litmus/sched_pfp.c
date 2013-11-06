@@ -78,7 +78,7 @@ static void pfp_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 	struct task_struct* t;
 	struct bheap_node* hn;
 
-	raw_spin_lock_irqsave(&pfp->slock, flags);
+	raw_readyq_lock_irqsave(&pfp->slock, flags);
 
 	while (!bheap_empty(tasks)) {
 		hn = bheap_take(fp_ready_order, tasks);
@@ -94,7 +94,7 @@ static void pfp_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 		preempt(pfp);
 	}
 
-	raw_spin_unlock_irqrestore(&pfp->slock, flags);
+	raw_readyq_unlock_irqrestore(&pfp->slock, flags);
 }
 
 static void pfp_preempt_check(pfp_domain_t *pfp)
@@ -166,7 +166,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 
 	int out_of_time, sleep, preempt, np, exists, blocks, resched, migrate;
 
-	raw_spin_lock(&pfp->slock);
+	raw_readyq_lock(&pfp->slock);
 
 	/* sanity checking
 	 * differently from gedf, when a task exits (dead)
@@ -261,7 +261,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 
 	pfp->scheduled = next;
 	sched_state_task_picked();
-	raw_spin_unlock(&pfp->slock);
+	raw_readyq_unlock(&pfp->slock);
 
 	return next;
 }
@@ -281,14 +281,14 @@ static void pfp_finish_switch(struct task_struct *prev)
 
 		to = task_pfp(prev);
 
-		raw_spin_lock(&to->slock);
+		raw_readyq_lock(&to->slock);
 
 		TRACE_TASK(prev, "adding to queue on P%d\n", to->cpu);
 		requeue(prev, to);
 		if (fp_preemption_needed(&to->ready_queue, to->scheduled))
 			preempt(to);
 
-		raw_spin_unlock(&to->slock);
+		raw_readyq_unlock(&to->slock);
 
 	}
 }
@@ -308,7 +308,7 @@ static void pfp_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	/* setup job parameters */
 	release_at(t, litmus_clock());
 
-	raw_spin_lock_irqsave(&pfp->slock, flags);
+	raw_readyq_lock_irqsave(&pfp->slock, flags);
 	if (is_scheduled) {
 		/* there shouldn't be anything else running at the time */
 		BUG_ON(pfp->scheduled);
@@ -318,7 +318,7 @@ static void pfp_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 		/* maybe we have to reschedule */
 		pfp_preempt_check(pfp);
 	}
-	raw_spin_unlock_irqrestore(&pfp->slock, flags);
+	raw_readyq_unlock_irqrestore(&pfp->slock, flags);
 }
 
 static void pfp_task_wake_up(struct task_struct *task)
@@ -328,7 +328,7 @@ static void pfp_task_wake_up(struct task_struct *task)
 	lt_t			now;
 
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
-	raw_spin_lock_irqsave(&pfp->slock, flags);
+	raw_readyq_lock_irqsave(&pfp->slock, flags);
 
 #ifdef CONFIG_LITMUS_LOCKING
 	/* Should only be queued when processing a fake-wake up due to a
@@ -370,7 +370,7 @@ static void pfp_task_wake_up(struct task_struct *task)
 #ifdef CONFIG_LITMUS_LOCKING
 out_unlock:
 #endif
-	raw_spin_unlock_irqrestore(&pfp->slock, flags);
+	raw_readyq_unlock_irqrestore(&pfp->slock, flags);
 	TRACE_TASK(task, "wake up done\n");
 }
 
@@ -399,7 +399,7 @@ static void pfp_task_exit(struct task_struct * t)
 	pfp_domain_t* 	pfp = task_pfp(t);
 	rt_domain_t*		dom;
 
-	raw_spin_lock_irqsave(&pfp->slock, flags);
+	raw_readyq_lock_irqsave(&pfp->slock, flags);
 	if (is_queued(t)) {
 		BUG(); /* This currently doesn't work. */
 		/* dequeue */
@@ -412,7 +412,7 @@ static void pfp_task_exit(struct task_struct * t)
 	}
 	TRACE_TASK(t, "RIP, now reschedule\n");
 
-	raw_spin_unlock_irqrestore(&pfp->slock, flags);
+	raw_readyq_unlock_irqrestore(&pfp->slock, flags);
 }
 
 #ifdef CONFIG_LITMUS_LOCKING
@@ -470,7 +470,7 @@ static void boost_priority(struct task_struct* t, lt_t priority_point)
 	unsigned long		flags;
 	pfp_domain_t* 	pfp = task_pfp(t);
 
-	raw_spin_lock_irqsave(&pfp->slock, flags);
+	raw_readyq_lock_irqsave(&pfp->slock, flags);
 
 
 	TRACE_TASK(t, "priority boosted at %llu\n", litmus_clock());
@@ -484,7 +484,7 @@ static void boost_priority(struct task_struct* t, lt_t priority_point)
 	 * part of lock acquisitions. */
 	BUG_ON(pfp->scheduled != t);
 
-	raw_spin_unlock_irqrestore(&pfp->slock, flags);
+	raw_readyq_unlock_irqrestore(&pfp->slock, flags);
 }
 
 static void unboost_priority(struct task_struct* t)
@@ -493,7 +493,7 @@ static void unboost_priority(struct task_struct* t)
 	pfp_domain_t* 	pfp = task_pfp(t);
 	lt_t			now;
 
-	raw_spin_lock_irqsave(&pfp->slock, flags);
+	raw_readyq_lock_irqsave(&pfp->slock, flags);
 	now = litmus_clock();
 
 	/* assumption: this only happens when the job is scheduled */
@@ -511,7 +511,7 @@ static void unboost_priority(struct task_struct* t)
 	if (fp_preemption_needed(&pfp->ready_queue, pfp->scheduled))
 		preempt(pfp);
 
-	raw_spin_unlock_irqrestore(&pfp->slock, flags);
+	raw_readyq_unlock_irqrestore(&pfp->slock, flags);
 }
 
 /* ******************** SRP support ************************ */
@@ -1077,7 +1077,7 @@ static void pcp_priority_inheritance(void)
 	blocker = ceiling ?  ceiling->owner : NULL;
 	blocked = __get_cpu_var(pcp_state).hp_waiter;
 
-	raw_spin_lock_irqsave(&pfp->slock, flags);
+	raw_readyq_lock_irqsave(&pfp->slock, flags);
 
 	/* Current is no longer inheriting anything by default.  This should be
 	 * the currently scheduled job, and hence not currently queued. */
@@ -1103,7 +1103,7 @@ static void pcp_priority_inheritance(void)
 	    fp_higher_prio(fp_prio_peek(&pfp->ready_queue), pfp->scheduled))
 		preempt(pfp);
 
-	raw_spin_unlock_irqrestore(&pfp->slock, flags);
+	raw_readyq_unlock_irqrestore(&pfp->slock, flags);
 }
 
 /* called with preemptions off */
@@ -1409,12 +1409,12 @@ static void pfp_migrate_to(int target_cpu)
 	/* lock both pfp domains in order of address */
 	from = task_pfp(t);
 
-	raw_spin_lock(&from->slock);
+	raw_readyq_lock(&from->slock);
 
 	/* switch partitions */
 	tsk_rt(t)->task_params.cpu = target_cpu;
 
-	raw_spin_unlock(&from->slock);
+	raw_readyq_unlock(&from->slock);
 
 	/* Don't trace scheduler costs as part of
 	 * locking overhead. Scheduling costs are accounted for

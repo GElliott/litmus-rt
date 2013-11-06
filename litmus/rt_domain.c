@@ -286,7 +286,7 @@ void rt_domain_init(rt_domain_t *rt,
 	for (i = 0; i < RELEASE_QUEUE_SLOTS; i++)
 		INIT_LIST_HEAD(&rt->release_queue.slot[i]);
 
-	raw_spin_lock_init(&rt->ready_lock);
+	raw_readyq_lock_init(&rt->ready_lock);
 	raw_spin_lock_init(&rt->release_lock);
 	raw_spin_lock_init(&rt->tobe_lock);
 

@@ -84,7 +84,7 @@ static void boost_priority(struct task_struct* t)
 	psnedf_domain_t* 	pedf = task_pedf(t);
 	lt_t			now;
 
-	raw_spin_lock_irqsave(&pedf->slock, flags);
+	raw_readyq_lock_irqsave(&pedf->slock, flags);
 	now = litmus_clock();
 
 	TRACE_TASK(t, "priority boosted at %llu\n", now);
@@ -104,7 +104,7 @@ static void boost_priority(struct task_struct* t)
 		raw_spin_unlock(&pedf->domain.release_lock);
 	} /* else: nothing to do since the job is not queued while scheduled */
 
-	raw_spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_readyq_unlock_irqrestore(&pedf->slock, flags);
 }
 
 static void unboost_priority(struct task_struct* t)
@@ -113,7 +113,7 @@ static void unboost_priority(struct task_struct* t)
 	psnedf_domain_t* 	pedf = task_pedf(t);
 	lt_t			now;
 
-	raw_spin_lock_irqsave(&pedf->slock, flags);
+	raw_readyq_lock_irqsave(&pedf->slock, flags);
 	now = litmus_clock();
 
 	/* assumption: this only happens when the job is scheduled */
@@ -131,7 +131,7 @@ static void unboost_priority(struct task_struct* t)
 	if (edf_preemption_needed(&pedf->domain, pedf->scheduled))
 		preempt(pedf);
 
-	raw_spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_readyq_unlock_irqrestore(&pedf->slock, flags);
 }
 
 #endif
@@ -201,7 +201,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	int 			out_of_time, sleep, preempt,
 				np, exists, blocks, resched;
 
-	raw_spin_lock(&pedf->slock);
+	raw_readyq_lock(&pedf->slock);
 
 	/* sanity checking
 	 * differently from gedf, when a task exits (dead)
@@ -275,7 +275,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 
 	pedf->scheduled = next;
 	sched_state_task_picked();
-	raw_spin_unlock(&pedf->slock);
+	raw_readyq_unlock(&pedf->slock);
 
 	return next;
 }
@@ -298,7 +298,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	/* The task should be running in the queue, otherwise signal
 	 * code will try to wake it up with fatal consequences.
 	 */
-	raw_spin_lock_irqsave(&pedf->slock, flags);
+	raw_readyq_lock_irqsave(&pedf->slock, flags);
 	if (is_scheduled) {
 		/* there shouldn't be anything else scheduled at the time */
 		BUG_ON(pedf->scheduled);
@@ -315,7 +315,7 @@ static void psnedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 			psnedf_preempt_check(pedf);
 		}
 	}
-	raw_spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_readyq_unlock_irqrestore(&pedf->slock, flags);
 }
 
 static void psnedf_task_wake_up(struct task_struct *task)
@@ -326,7 +326,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 	lt_t			now;
 
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
-	raw_spin_lock_irqsave(&pedf->slock, flags);
+	raw_readyq_lock_irqsave(&pedf->slock, flags);
 	BUG_ON(is_queued(task));
 	now = litmus_clock();
 	if (is_sporadic(task) && is_tardy(task, now)
@@ -354,7 +354,7 @@ static void psnedf_task_wake_up(struct task_struct *task)
 		psnedf_preempt_check(pedf);
 	}
 
-	raw_spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_readyq_unlock_irqrestore(&pedf->slock, flags);
 	TRACE_TASK(task, "wake up done\n");
 }
 
@@ -373,7 +373,7 @@ static void psnedf_task_exit(struct task_struct * t)
 	psnedf_domain_t* 	pedf = task_pedf(t);
 	rt_domain_t*		edf;
 
-	raw_spin_lock_irqsave(&pedf->slock, flags);
+	raw_readyq_lock_irqsave(&pedf->slock, flags);
 	if (is_queued(t)) {
 		/* dequeue */
 		edf  = task_edf(t);
@@ -385,7 +385,7 @@ static void psnedf_task_exit(struct task_struct * t)
 	TRACE_TASK(t, "RIP, now reschedule\n");
 
 	preempt(pedf);
-	raw_spin_unlock_irqrestore(&pedf->slock, flags);
+	raw_readyq_unlock_irqrestore(&pedf->slock, flags);
 }
 
 #ifdef CONFIG_LITMUS_LOCKING

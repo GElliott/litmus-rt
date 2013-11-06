@@ -7,6 +7,23 @@
 
 #include <litmus/bheap.h>
 
+#ifdef CONFIG_RECURSIVE_READYQ_LOCK
+#include <litmus/rspinlock.h>
+#define raw_readyq_spinlock_t   raw_rspinlock_t
+#define raw_readyq_lock_irqsave raw_rspin_lock_irqsave
+#define raw_readyq_lock         raw_rspin_lock
+#define raw_readyq_unlock_irqrestore    raw_rspin_unlock_irqrestore
+#define raw_readyq_unlock       raw_rspin_unlock
+#define raw_readyq_lock_init    raw_rspin_lock_init
+#else
+#define raw_readyq_spinlock_t   raw_spinlock_t
+#define raw_readyq_lock_irqsave raw_spin_lock_irqsave
+#define raw_readyq_lock         raw_spin_lock
+#define raw_readyq_unlock_irqrestore    raw_spin_unlock_irqrestore
+#define raw_readyq_unlock       raw_spin_unlock
+#define raw_readyq_lock_init    raw_spin_lock_init
+#endif
+
 #define RELEASE_QUEUE_SLOTS 127 /* prime */
 
 struct _rt_domain;
@@ -22,7 +39,7 @@ struct release_queue {
 
 typedef struct _rt_domain {
 	/* runnable rt tasks are in here */
-	raw_spinlock_t 			ready_lock;
+	raw_readyq_spinlock_t 	ready_lock;
 	struct bheap	 		ready_queue;
 
 	/* real-time tasks waiting for release are in here */
@@ -115,17 +132,17 @@ static inline void add_ready(rt_domain_t* rt, struct task_struct *new)
 {
 	unsigned long flags;
 	/* first we need the write lock for rt_ready_queue */
-	raw_spin_lock_irqsave(&rt->ready_lock, flags);
+	raw_readyq_lock_irqsave(&rt->ready_lock, flags);
 	__add_ready(rt, new);
-	raw_spin_unlock_irqrestore(&rt->ready_lock, flags);
+	raw_readyq_unlock_irqrestore(&rt->ready_lock, flags);
 }
 
 static inline void merge_ready(rt_domain_t* rt, struct bheap* tasks)
 {
 	unsigned long flags;
-	raw_spin_lock_irqsave(&rt->ready_lock, flags);
+	raw_readyq_lock_irqsave(&rt->ready_lock, flags);
 	__merge_ready(rt, tasks);
-	raw_spin_unlock_irqrestore(&rt->ready_lock, flags);
+	raw_readyq_unlock_irqrestore(&rt->ready_lock, flags);
 }
 
 static inline struct task_struct* take_ready(rt_domain_t* rt)
@@ -133,9 +150,9 @@ static inline struct task_struct* take_ready(rt_domain_t* rt)
 	unsigned long flags;
 	struct task_struct* ret;
 	/* first we need the write lock for rt_ready_queue */
-	raw_spin_lock_irqsave(&rt->ready_lock, flags);
+	raw_readyq_lock_irqsave(&rt->ready_lock, flags);
 	ret = __take_ready(rt);
-	raw_spin_unlock_irqrestore(&rt->ready_lock, flags);
+	raw_readyq_unlock_irqrestore(&rt->ready_lock, flags);
 	return ret;
 }
 
@@ -173,9 +190,9 @@ static inline int jobs_pending(rt_domain_t* rt)
 	unsigned long flags;
 	int ret;
 	/* first we need the write lock for rt_ready_queue */
-	raw_spin_lock_irqsave(&rt->ready_lock, flags);
+	raw_readyq_lock_irqsave(&rt->ready_lock, flags);
 	ret = !bheap_empty(&rt->ready_queue);
-	raw_spin_unlock_irqrestore(&rt->ready_lock, flags);
+	raw_readyq_unlock_irqrestore(&rt->ready_lock, flags);
 	return ret;
 }
 

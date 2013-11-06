@@ -206,9 +206,9 @@ asmlinkage long sys_get_rt_task_param(pid_t pid, struct rt_task __user * param)
 	retval =
 		copy_to_user(param, &lp, sizeof(lp)) ? -EFAULT : 0;
 	return retval;
-	  out_unlock:
+out_unlock:
 	read_unlock(&tasklist_lock);
-	  out:
+out:
 	return retval;
 
 }
@@ -238,7 +238,7 @@ asmlinkage long sys_complete_job(void)
 	 * appropriate queue and call schedule
 	 */
 	retval = litmus->complete_job();
-	  out:
+out:
 	return retval;
 }
 
@@ -287,7 +287,7 @@ asmlinkage long sys_wait_for_job_release(unsigned int job)
 		 * don't send the task to sleep.
 		 */
 		retval = litmus->complete_job();
-	  out:
+out:
 	return retval;
 }
 

@@ -220,7 +220,7 @@ struct st_inject_args {
 		/* ST_INJECT_MIGRATION */
 		struct {
 			unsigned int from;
-			unsigned int to; 
+			unsigned int to;
 		};
 	};
 };

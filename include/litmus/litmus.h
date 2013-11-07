@@ -73,6 +73,7 @@ void litmus_do_exit(struct task_struct *tsk);
 /* job_param macros */
 #define get_exec_time(t)    (tsk_rt(t)->job_params.exec_time)
 #define get_deadline(t)		(tsk_rt(t)->job_params.deadline)
+#define get_period(t)		(tsk_rt(t)->task_params.period)
 #define get_release(t)		(tsk_rt(t)->job_params.release)
 #define get_lateness(t)		(tsk_rt(t)->job_params.lateness)
 #define get_backlog(t)		(tsk_rt(t)->job_params.backlog)
@@ -166,6 +167,9 @@ static inline lt_t litmus_clock(void)
 #define earlier_deadline(a, b) (lt_before(\
 	(a)->rt_param.job_params.deadline,\
 	(b)->rt_param.job_params.deadline))
+#define shorter_period(a, b) (lt_before(\
+	(a)->rt_param.task_params.period,\
+	(b)->rt_param.task_params.period))
 #define earlier_release(a, b)  (lt_before(\
 	(a)->rt_param.job_params.release,\
 	(b)->rt_param.job_params.release))

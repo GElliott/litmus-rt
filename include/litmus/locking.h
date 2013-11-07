@@ -2,6 +2,11 @@
 #define LITMUS_LOCKING_H
 
 #include <linux/list.h>
+
+#if defined(CONFIG_DEBUG_SPINLOCK) && defined(CONFIG_LITMUS_NESTED_LOCKING)
+#include <linux/lockdep.h>
+#endif
+
 #include <litmus/binheap.h>
 
 struct litmus_lock_ops;
@@ -45,13 +50,36 @@ struct litmus_lock {
 
 #ifdef CONFIG_LITMUS_NESTED_LOCKING
 	struct nested_info nest;
-	char cheat_lockdep[2];
-	struct lock_class_key key;
 #endif
 
 	struct litmus_lock_proc_ops *proc;
 	char *name;
+
+#if defined(CONFIG_DEBUG_SPINLOCK) && defined(CONFIG_LITMUS_NESTED_LOCKING)
+	/* We need to allow spinlocks to be acquired in a nested fashion without
+	   triggering complaints from lockdep. These fields are used to assign a
+	   unique lockdep class to each lock instance (the locks would all be of
+	   the same lockdep class, otherwise).
+
+	   Notes:
+	   - A small change to lockdep is also require to enable non-static-memory
+	     names/keys.
+	   - Locks must still be acquired in a total order to avoid deadlock.
+	 */
+	struct lock_class_key lockdep_key;
+#endif
 };
+
+#if defined(CONFIG_LITMUS_NESTED_LOCKING) && defined(CONFIG_DEBUG_SPINLOCK)
+#define LOCKDEP_DYNAMIC_ALLOC(litlock, lock) \
+	do { \
+		lockdep_set_class_and_name((lock), \
+			&((struct litmus_lock*)litlock)->lockdep_key, #litlock); \
+	} while(0)
+#else
+#define LOCKDEP_DYNAMIC_ALLOC(litlock, lock) \
+	do { (void)litlock; (void)lock; } while(0)
+#endif
 
 #ifdef CONFIG_LITMUS_DGL_SUPPORT
 

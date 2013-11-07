@@ -1888,15 +1888,8 @@ struct litmus_lock* ikglp_new(unsigned int m,
 	sem->litmus_lock.ops = ops;
 //	sem->litmus_lock.proc = &ikglp_proc_ops;
 
-#ifdef CONFIG_DEBUG_SPINLOCK
-	{
-		__raw_spin_lock_init(&sem->lock,
-						((struct litmus_lock*)sem)->cheat_lockdep,
-						&((struct litmus_lock*)sem)->key);
-	}
-#else
 	raw_spin_lock_init(&sem->lock);
-#endif
+	LOCKDEP_DYNAMIC_ALLOC(sem, &sem->lock);
 
 	raw_spin_lock_init(&sem->real_lock);
 

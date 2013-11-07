@@ -596,6 +596,19 @@ static int static_obj(void *obj)
 		      end   = (unsigned long) &_end,
 		      addr  = (unsigned long) obj;
 
+#ifdef CONFIG_LITMUS_NESTED_LOCKING
+	/*
+	 * Spinlocks that protect the content of some litmus locks
+	 * need to be acquired in a nested fashion in order to implement
+	 * transitive priority inheritance. Normally, lockdep would
+	 * complain because these locks would be of the same class.
+	 * To get around this, each lock is put in its own class by pairing
+	 * each lock instance with a unique key allocated in dynamic memory.
+	 * Hence, the change here to allow dynamic memory keys is needed.
+	 */
+	return 1;
+#endif
+
 	/*
 	 * static variable?
 	 */

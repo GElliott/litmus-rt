@@ -969,16 +969,8 @@ struct litmus_lock* fifo_mutex_new(struct litmus_lock_ops* ops)
 	mutex->hp_waiter = NULL;
 	init_waitqueue_head(&mutex->wait);
 
-
-#ifdef CONFIG_DEBUG_SPINLOCK
-	{
-		__raw_spin_lock_init(&mutex->lock,
-							 ((struct litmus_lock*)mutex)->cheat_lockdep,
-							 &((struct litmus_lock*)mutex)->key);
-	}
-#else
 	raw_spin_lock_init(&mutex->lock);
-#endif
+	LOCKDEP_DYNAMIC_ALLOC(mutex, &mutex->lock);
 
 	((struct litmus_lock*)mutex)->nest.hp_waiter_ptr = &mutex->hp_waiter;
 

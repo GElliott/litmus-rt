@@ -239,6 +239,46 @@ TRACE_EVENT(litmus_sys_release,
 	TP_printk("SynRelease(%Lu) at %Lu\n", __entry->rel, __entry->when)
 );
 
+TRACE_EVENT(litmus_eff_prio_change,
+
+	TP_PROTO(struct task_struct* t, struct task_struct* p),
+
+	TP_ARGS(t, p),
+
+	TP_STRUCT__entry(
+		__field( lt_t, when)
+		__field( pid_t, pid	)
+		__field( lt_t, deadline )
+		__field( pid_t, inh_pid )
+		__field( lt_t, inh_deadline )
+		__field( pid_t, prev_inh_pid )
+		__field( lt_t, prev_inh_deadline )
+	),
+
+	TP_fast_assign(
+		__entry->when = litmus_clock();
+		__entry->pid = t ? t->pid : 0;
+		__entry->deadline = t ? t->rt_param.job_params.deadline : 0;
+		__entry->inh_pid = p ? p->pid : 0;
+		__entry->inh_deadline = p ? p->rt_param.job_params.deadline : 0;
+		__entry->prev_inh_pid = (t && t->rt_param.inh_task) ?
+			t->rt_param.inh_task->pid : 0;
+		__entry->prev_inh_deadline = (t && t->rt_param.inh_task) ?
+			t->rt_param.inh_task->rt_param.job_params.deadline : 0;
+	),
+
+	TP_printk("Priority Change at %Lu: "
+		"%d @ %Lu (eff: %d @ %Lu) -> %d @ %Lu (prio %s)\n",
+		__entry->when,
+		__entry->pid, __entry->deadline,
+		__entry->prev_inh_pid, __entry->prev_inh_deadline,
+		__entry->inh_pid, __entry->inh_deadline,
+		(__entry->inh_pid) ?
+			(__entry->inh_deadline <= (__entry->prev_inh_pid ?
+				__entry->prev_inh_deadline : __entry->deadline)) ?
+				"INCREASE" : "DECREASE" : "DECREASE")
+);
+
 #endif /* _SCHED_TASK_TRACEPOINT_H */
 
 /* Must stay outside the protection */

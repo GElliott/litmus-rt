@@ -168,14 +168,28 @@ TRACE_EVENT(litmus_task_block,
 	TP_STRUCT__entry(
 		__field( pid_t,		pid	)
 		__field( lt_t,		when	)
+		__field( int,		for_io	)
 	),
 
 	TP_fast_assign(
 		__entry->pid	= t ? t->pid : 0;
 		__entry->when	= litmus_clock();
+		__entry->for_io = t ? 0
+#ifdef CONFIG_REALTIME_AUX_TASKS
+			|| (t->rt_param.has_aux_tasks &&
+					!t->rt_param.hide_from_aux_tasks)
+#endif
+#ifdef CONFIG_LITMUS_NVIDIA
+			|| (t->rt_param.held_gpus &&
+					!t->rt_param.hide_from_gpu)
+#endif
+			: 0;
 	),
 
-	TP_printk("(%u) blocks: %Lu\n", __entry->pid, __entry->when)
+	TP_printk("(%u) blocks (for I/O: %s): %Lu\n",
+			__entry->pid,
+			__entry->for_io ? "yes" : "no",
+			__entry->when)
 );
 
 /*

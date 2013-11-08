@@ -164,15 +164,16 @@ void simple_io_on_blocked(struct task_struct* t)
 {
 	/* hiding is turned on by locking protocols, so if there isn't any
 	   hiding, then we're blocking for some other reason.  assume it's I/O. */
-
-	int for_io = !tsk_rt(t)->blocked_lock || (0
+	int for_io = 0;
+#ifdef CONFIG_LITMUS_NESTED_LOCKING
+	for_io |= !tsk_rt(t)->blocked_lock;
+#endif
 #ifdef CONFIG_REALTIME_AUX_TASKS
-		|| (tsk_rt(t)->has_aux_tasks && !tsk_rt(t)->hide_from_aux_tasks)
+	for_io |= tsk_rt(t)->has_aux_tasks && !tsk_rt(t)->hide_from_aux_tasks;
 #endif
 #ifdef CONFIG_LITMUS_NVIDIA
-		|| (tsk_rt(t)->held_gpus && !tsk_rt(t)->hide_from_gpu)
+	for_io |= tsk_rt(t)->held_gpus && !tsk_rt(t)->hide_from_gpu;
 #endif
-		);
 
 	/* we drain budget for io-based suspensions */
 	if (for_io) {

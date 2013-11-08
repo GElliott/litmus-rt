@@ -366,7 +366,6 @@ int edf_min_heap_base_priority_order(struct binheap_node *a,
 }
 #endif
 
-
 int edf_ready_order(struct bheap_node* a, struct bheap_node* b)
 {
 	return edf_higher_prio(bheap2task(a), bheap2task(b));

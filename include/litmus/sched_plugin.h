@@ -65,7 +65,6 @@ typedef void (*task_cleanup_t)	(struct task_struct *);
 /* Called to compare the scheduling priorities between two tasks */
 typedef int (*higher_prio_t)(struct task_struct* a, struct task_struct* b);
 
-
 /************** locking and inheritance routines *************/
 #ifdef CONFIG_LITMUS_LOCKING
 /* Called when the current task attempts to create a new lock of a given
@@ -88,6 +87,7 @@ typedef enum
 	BASE,
 	EFFECTIVE
 } comparison_mode_t;
+
 typedef void (*nested_increase_prio_t)(struct task_struct* t,
 				struct task_struct* prio_inh, raw_spinlock_t *to_unlock,
 				unsigned long irqflags);

@@ -134,6 +134,38 @@ static void job_completion(struct task_struct* t, int forced)
 		sched_trace_task_release(t);
 }
 
+static enum hrtimer_restart pfp_simple_on_exhausted(struct task_struct *t,
+				int in_schedule)
+{
+    /* Assumption: t is scheduled on the CPU executing this callback */
+
+    if (budget_signalled(t) &&
+		!bt_flag_is_set(t, BTF_SIG_BUDGET_SENT)) {
+        /* signal exhaustion */
+        send_sigbudget(t); /* will set BTF_SIG_BUDGET_SENT */
+    }    
+
+    if (budget_enforced(t) &&
+		!bt_flag_test_and_set(t, BTF_BUDGET_EXHAUSTED)) {
+        if (!is_np(t)) {
+            /* np tasks will be preempted when they become
+             * preemptable again
+             */
+            litmus_reschedule_local();
+            TRACE("cedf_scheduler_tick: "
+                  "%d is preemptable "
+                  " => FORCE_RESCHED\n", t->pid);
+        } else if (is_user_np(t)) {
+            TRACE("cedf_scheduler_tick: "
+                  "%d is non-preemptable, "
+                  "preemption delayed.\n", t->pid);
+            request_exit_np(t);
+        }    
+    }    
+
+    return HRTIMER_NORESTART;
+}
+
 static void pfp_tick(struct task_struct *t)
 {
 	pfp_domain_t *pfp = local_pfp;
@@ -144,19 +176,12 @@ static void pfp_tick(struct task_struct *t)
 	 */
 	BUG_ON(is_realtime(t) && t != pfp->scheduled);
 
-	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
-		if (!is_np(t)) {
-			litmus_reschedule_local();
-			TRACE("pfp_scheduler_tick: "
-			      "%d is preemptable "
-			      " => FORCE_RESCHED\n", t->pid);
-		} else if (is_user_np(t)) {
-			TRACE("pfp_scheduler_tick: "
-			      "%d is non-preemptable, "
-			      "preemption delayed.\n", t->pid);
-			request_exit_np(t);
-		}
-	}
+    if (is_realtime(t) &&
+        tsk_rt(t)->budget.ops && budget_quantum_tracked(t) &&
+        budget_exhausted(t)) {
+        TRACE_TASK(t, "budget exhausted\n");
+        budget_state_machine2(t,on_exhausted,IN_SCHEDULE);
+    } 
 }
 
 static struct task_struct* pfp_schedule(struct task_struct * prev)
@@ -180,7 +205,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 	blocks      = exists && !is_running(pfp->scheduled);
 	out_of_time = exists &&
 				  budget_enforced(pfp->scheduled) &&
-				  budget_exhausted(pfp->scheduled);
+				  bt_flag_is_set(pfp->scheduled, BTF_BUDGET_EXHAUSTED);
 	np 	    = exists && is_np(pfp->scheduled);
 	sleep	    = exists && is_completed(pfp->scheduled);
 	migrate     = exists && get_partition(pfp->scheduled) != pfp->cpu;
@@ -191,6 +216,14 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 	 * circumstances.
 	 */
 	resched = preempt;
+
+	/* Do budget stuff */
+	if (blocks)
+		budget_state_machine(prev,on_blocked);
+	else if (sleep)
+		budget_state_machine(prev,on_sleep);
+	else if (preempt)
+		budget_state_machine(prev,on_preempt);
 
 	/* If a task blocks we have no choice but to reschedule.
 	 */
@@ -355,6 +388,8 @@ static void pfp_task_wake_up(struct task_struct *task)
 		sched_trace_task_release(task);
 	}
 
+	budget_state_machine(task,on_wakeup);
+
 	/* Only add to ready queue if it is not the currently-scheduled
 	 * task. This could be the case if a task was woken up concurrently
 	 * on a remote CPU before the executing CPU got around to actually
@@ -400,6 +435,10 @@ static void pfp_task_exit(struct task_struct * t)
 	rt_domain_t*		dom;
 
 	raw_readyq_lock_irqsave(&pfp->slock, flags);
+
+	/* disable budget enforcement */
+	budget_state_machine(t,on_exit);
+
 	if (is_queued(t)) {
 		BUG(); /* This currently doesn't work. */
 		/* dequeue */
@@ -446,7 +485,13 @@ static void fp_set_prio_inh(pfp_domain_t* pfp, struct task_struct* t,
 		/* first remove */
 		fp_dequeue(pfp, t);
 
+	if (t->rt_param.inh_task)
+		budget_state_machine_chgprio(t,t->rt_param.inh_task,on_disinherit);
+
 	t->rt_param.inh_task = prio_inh;
+
+	if (prio_inh)
+		budget_state_machine_chgprio(t,prio_inh,on_inherit);
 
 	if (requeue)
 		/* add again to the right queue */
@@ -678,6 +723,7 @@ static struct litmus_lock* pfp_new_fmlp(void)
 	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
 	if (!sem)
 		return NULL;
+	memset(sem, 0, sizeof(*sem));
 
 	sem->owner   = NULL;
 	init_waitqueue_head(&sem->wait);
@@ -967,6 +1013,7 @@ static struct litmus_lock* pfp_new_mpcp(int vspin)
 	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
 	if (!sem)
 		return NULL;
+	memset(sem, 0, sizeof(*sem));
 
 	sem->owner   = NULL;
 	init_waitqueue_head(&sem->wait);
@@ -1369,6 +1416,7 @@ static struct litmus_lock* pfp_new_pcp(int on_cpu)
 	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
 	if (!sem)
 		return NULL;
+	memset(sem, 0, sizeof(*sem));
 
 	sem->litmus_lock.ops = &pfp_pcp_lock_ops;
 	pcp_init_semaphore(sem, on_cpu);
@@ -1568,6 +1616,7 @@ static struct litmus_lock* pfp_new_dpcp(int on_cpu)
 	sem = kmalloc(sizeof(*sem), GFP_KERNEL);
 	if (!sem)
 		return NULL;
+	memset(sem, 0, sizeof(*sem));
 
 	sem->litmus_lock.ops = &pfp_dpcp_lock_ops;
 	sem->owner_cpu = NO_CPU;
@@ -1664,17 +1713,47 @@ static long pfp_allocate_lock(struct litmus_lock **lock, int type,
 
 #endif
 
+static struct budget_tracker_ops pfp_drain_simple_ops =
+{
+	.on_scheduled = simple_on_scheduled,
+	.on_blocked = simple_on_blocked,
+	.on_preempt = simple_on_preempt,
+	.on_sleep = simple_on_sleep,
+	.on_exit = simple_on_exit,
+
+	.on_exhausted = pfp_simple_on_exhausted,
+
+	.on_inherit = NULL,
+	.on_disinherit = NULL,
+};
+
 static long pfp_admit_task(struct task_struct* tsk)
 {
+	long ret = 0;
+
 	if (task_cpu(tsk) == tsk->rt_param.task_params.cpu &&
 #ifdef CONFIG_RELEASE_MASTER
 	    /* don't allow tasks on release master CPU */
 	    task_cpu(tsk) != remote_dom(task_cpu(tsk))->release_master &&
 #endif
-	    litmus_is_valid_fixed_prio(get_priority(tsk)))
-		return 0;
+	    litmus_is_valid_fixed_prio(get_priority(tsk))) {
+
+		if (budget_enforced(tsk) || budget_signalled(tsk)) {
+			switch(get_drain_policy(tsk)) {
+				case DRAIN_SIMPLE:
+					init_budget_tracker(&tsk_rt(tsk)->budget, &pfp_drain_simple_ops);
+					break;
+				default:
+					TRACE_TASK(tsk, "Unsupported budget draining mode.\n");
+					ret = -EINVAL;
+					break;
+			}
+		}
+	}
 	else
-		return -EINVAL;
+		ret = -EINVAL;
+
+	return ret;
 }
 
 static struct domain_proc_info pfp_domain_proc_info;

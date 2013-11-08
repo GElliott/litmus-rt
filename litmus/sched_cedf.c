@@ -1430,7 +1430,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	cedf_domain_t*		cluster;
 
 	TRACE("c-edf: task new %d (param running = %d, is_running = %d)\n",
-					t->pid, running, is_running(t));
+					t->pid, is_scheduled, is_running(t));
 
 	/* the cluster doesn't change even if t is running */
 	cluster = task_cpu_cluster(t);

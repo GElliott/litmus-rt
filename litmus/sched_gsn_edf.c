@@ -377,6 +377,36 @@ static noinline void job_completion(struct task_struct *t, int forced)
 		gsnedf_job_arrival(t);
 }
 
+static enum hrtimer_restart gsnedf_simple_on_exhausted(struct task_struct *t,
+				int in_schedule)
+{
+	/* Assumption: t is scheduled on the CPU executing this callback */
+
+	if (budget_signalled(t) && !bt_flag_is_set(t, BTF_SIG_BUDGET_SENT)) {
+		/* signal exhaustion */
+		send_sigbudget(t); /* will set BTF_SIG_BUDGET_SENT */
+	}
+
+	if (budget_enforced(t) && !bt_flag_test_and_set(t, BTF_BUDGET_EXHAUSTED)) {
+		if (!is_np(t)) {
+			/* np tasks will be preempted when they become
+			 * preemptable again
+			 */
+			litmus_reschedule_local();
+			TRACE("gsnedf_scheduler_tick: "
+				"%d is preemptable "
+				" => FORCE_RESCHED\n", t->pid);
+		} else if (is_user_np(t)) {
+			TRACE("gsnedf_scheduler_tick: "
+				"%d is non-preemptable, "
+				"preemption delayed.\n", t->pid);
+			request_exit_np(t);
+		}
+	}
+
+	return HRTIMER_NORESTART;
+}
+
 /* gsnedf_tick - this function is called for every local timer
  *                         interrupt.
  *
@@ -385,21 +415,11 @@ static noinline void job_completion(struct task_struct *t, int forced)
  */
 static void gsnedf_tick(struct task_struct* t)
 {
-	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
-		if (!is_np(t)) {
-			/* np tasks will be preempted when they become
-			 * preemptable again
-			 */
-			litmus_reschedule_local();
-			TRACE("gsnedf_scheduler_tick: "
-			      "%d is preemptable "
-			      " => FORCE_RESCHED\n", t->pid);
-		} else if (is_user_np(t)) {
-			TRACE("gsnedf_scheduler_tick: "
-			      "%d is non-preemptable, "
-			      "preemption delayed.\n", t->pid);
-			request_exit_np(t);
-		}
+	if (is_realtime(t) &&
+		tsk_rt(t)->budget.ops && budget_quantum_tracked(t) &&
+		budget_exhausted(t)) {
+		TRACE_TASK(t, "budget exhausted\n");
+		budget_state_machine2(t,on_exhausted,!IN_SCHEDULE);
 	}
 }
 
@@ -451,7 +471,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	exists      = entry->scheduled != NULL;
 	blocks      = exists && !is_running(entry->scheduled);
 	out_of_time = exists && budget_enforced(entry->scheduled)
-		&& budget_exhausted(entry->scheduled);
+		&& bt_flag_is_set(entry->scheduled, BTF_BUDGET_EXHAUSTED);
 	np 	    = exists && is_np(entry->scheduled);
 	sleep	    = exists && is_completed(entry->scheduled);
 	preempt     = entry->scheduled != entry->linked;
@@ -470,6 +490,13 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 		TRACE_TASK(prev, "will be preempted by %s/%d\n",
 			   entry->linked->comm, entry->linked->pid);
 
+	/* Do budget stuff */
+	if (blocks)
+		budget_state_machine(prev,on_blocked);
+	else if (sleep)
+		budget_state_machine(prev,on_sleep);
+	else if (preempt)
+		budget_state_machine(prev,on_preempt);
 
 	/* If a task blocks we have no choice but to reschedule.
 	 */
@@ -607,6 +634,9 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 		release_at(task, now);
 		sched_trace_task_release(task);
 	}
+
+	budget_state_machine(task,on_wakeup);
+
 	gsnedf_job_arrival(task);
 	raw_readyq_unlock_irqrestore(&gsnedf_lock, flags);
 }
@@ -632,6 +662,10 @@ static void gsnedf_task_exit(struct task_struct * t)
 
 	/* unlink if necessary */
 	raw_readyq_lock_irqsave(&gsnedf_lock, flags);
+
+	/* disable budget enforcement */
+	budget_state_machine(t,on_exit);
+
 	unlink(t);
 	if (tsk_rt(t)->scheduled_on != NO_CPU) {
 		gsnedf_cpus[tsk_rt(t)->scheduled_on]->scheduled = NULL;
@@ -643,9 +677,33 @@ static void gsnedf_task_exit(struct task_struct * t)
         TRACE_TASK(t, "RIP\n");
 }
 
+static struct budget_tracker_ops gsnedf_drain_simple_ops =
+{
+	.on_scheduled = simple_on_scheduled,
+	.on_blocked = simple_on_blocked,
+	.on_preempt = simple_on_preempt,
+	.on_sleep = simple_on_sleep,
+	.on_exit = simple_on_exit,
+
+	.on_exhausted = gsnedf_simple_on_exhausted,
+
+	.on_inherit = NULL,
+	.on_disinherit = NULL,
+};
 
 static long gsnedf_admit_task(struct task_struct* tsk)
 {
+	if (budget_enforced(tsk) || budget_signalled(tsk)) {
+		switch(get_drain_policy(tsk)) {
+			case DRAIN_SIMPLE:
+				init_budget_tracker(&tsk_rt(tsk)->budget,
+							&gsnedf_drain_simple_ops);
+				break;
+			default:
+				TRACE_TASK(tsk, "Unsupported budget draining mode.\n");
+				return -EINVAL;
+		}
+	}
 	return 0;
 }
 

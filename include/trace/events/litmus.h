@@ -142,6 +142,8 @@ TRACE_EVENT(litmus_task_completion,
 		__field( unsigned int,	job	)
 		__field( lt_t,		when	)
 		__field( unsigned long,	forced	)
+		__field( unsigned long, backlog )
+		__field( unsigned long, was_backlog_job)
 	),
 
 	TP_fast_assign(
@@ -149,11 +151,17 @@ TRACE_EVENT(litmus_task_completion,
 		__entry->job	= t ? t->rt_param.job_params.job_no : 0;
 		__entry->when	= litmus_clock();
 		__entry->forced	= forced;
+		__entry->backlog = t ? t->rt_param.job_params.backlog : 0;
+		__entry->was_backlog_job = t ?
+			t->rt_param.job_params.is_backlogged_job : 0;
 	),
 
-	TP_printk("completed(job(%u, %u)): %Lu (forced: %lu)\n",
+	TP_printk("completed(job(%u, %u)): %Lu "
+			"(forced: %lu) (was_bkj: %s) (bk_remain: %lu)\n",
 			__entry->pid, __entry->job,
-			__entry->when, __entry->forced)
+			__entry->when, __entry->forced,
+			__entry->was_backlog_job ? "yes" : "no",
+			__entry->backlog)
 );
 
 /*

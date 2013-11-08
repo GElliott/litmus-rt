@@ -167,6 +167,31 @@ static void job_completion(struct task_struct* t, int forced)
 	prepare_for_next_period(t);
 }
 
+static enum hrtimer_restart psnedf_simple_on_exhausted(struct task_struct *t, int in_schedule)
+{
+	/* Assumption: t is scheduled on the CPU executing this callback */
+
+	if (budget_signalled(t) && !bt_flag_is_set(t, BTF_SIG_BUDGET_SENT)) {
+		/* signal exhaustion */
+		send_sigbudget(t); /* will set BTF_SIG_BUDGET_SENT */
+	}
+
+	if (budget_enforced(t) && !bt_flag_test_and_set(t, BTF_BUDGET_EXHAUSTED)) {
+		if (!is_np(t)) {
+			/* np tasks will be preempted when they become
+			 * preemptable again
+			 */
+			litmus_reschedule_local();
+			TRACE("%d is preemptable => FORCE_RESCHED\n", t->pid);
+		} else if (is_user_np(t)) {
+			TRACE("%d is non-preemptable, preemption delayed.\n", t->pid);
+			request_exit_np(t);
+		}
+	}
+
+	return HRTIMER_NORESTART;
+}
+
 static void psnedf_tick(struct task_struct *t)
 {
 	psnedf_domain_t *pedf = local_pedf;
@@ -177,18 +202,11 @@ static void psnedf_tick(struct task_struct *t)
 	 */
 	BUG_ON(is_realtime(t) && t != pedf->scheduled);
 
-	if (is_realtime(t) && budget_enforced(t) && budget_exhausted(t)) {
-		if (!is_np(t)) {
-			litmus_reschedule_local();
-			TRACE("psnedf_scheduler_tick: "
-			      "%d is preemptable "
-			      " => FORCE_RESCHED\n", t->pid);
-		} else if (is_user_np(t)) {
-			TRACE("psnedf_scheduler_tick: "
-			      "%d is non-preemptable, "
-			      "preemption delayed.\n", t->pid);
-			request_exit_np(t);
-		}
+	if (is_realtime(t) &&
+		tsk_rt(t)->budget.ops && budget_quantum_tracked(t) &&
+		budget_exhausted(t)) {
+		TRACE_TASK(t, "budget exhausted\n");
+		budget_state_machine2(t,on_exhausted,!IN_SCHEDULE);
 	}
 }
 
@@ -215,7 +233,7 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	blocks      = exists && !is_running(pedf->scheduled);
 	out_of_time = exists &&
 				  budget_enforced(pedf->scheduled) &&
-				  budget_exhausted(pedf->scheduled);
+				  bt_flag_is_set(pedf->scheduled, BTF_BUDGET_EXHAUSTED);
 	np 	    = exists && is_np(pedf->scheduled);
 	sleep	    = exists && is_completed(pedf->scheduled);
 	preempt     = edf_preemption_needed(edf, prev);
@@ -225,6 +243,14 @@ static struct task_struct* psnedf_schedule(struct task_struct * prev)
 	 * circumstances.
 	 */
 	resched = preempt;
+
+	/* Do budget stuff */
+	if (blocks)
+		budget_state_machine(prev,on_blocked);
+	else if (sleep)
+		budget_state_machine(prev,on_sleep);
+	else if (preempt)
+		budget_state_machine(prev,on_preempt);
 
 	/* If a task blocks we have no choice but to reschedule.
 	 */
@@ -343,6 +369,8 @@ static void psnedf_task_wake_up(struct task_struct *task)
 		sched_trace_task_release(task);
 	}
 
+	budget_state_machine(task,on_wakeup);
+
 	/* Only add to ready queue if it is not the currently-scheduled
 	 * task. This could be the case if a task was woken up concurrently
 	 * on a remote CPU before the executing CPU got around to actually
@@ -374,6 +402,10 @@ static void psnedf_task_exit(struct task_struct * t)
 	rt_domain_t*		edf;
 
 	raw_readyq_lock_irqsave(&pedf->slock, flags);
+
+	/* disable budget enforcement */
+	budget_state_machine(t,on_exit);
+
 	if (is_queued(t)) {
 		/* dequeue */
 		edf  = task_edf(t);
@@ -665,17 +697,47 @@ static long psnedf_deactivate_plugin(void)
 	return 0;
 }
 
+static struct budget_tracker_ops psnedf_drain_simple_ops =
+{
+	.on_scheduled = simple_on_scheduled,
+	.on_blocked = simple_on_blocked,
+	.on_preempt = simple_on_preempt,
+	.on_sleep = simple_on_sleep,
+	.on_exit = simple_on_exit,
+
+	.on_exhausted = psnedf_simple_on_exhausted,
+
+	.on_inherit = NULL,
+	.on_disinherit = NULL,
+};
+
 static long psnedf_admit_task(struct task_struct* tsk)
 {
+	long ret = 0;
+
 	if (task_cpu(tsk) == tsk->rt_param.task_params.cpu
 #ifdef CONFIG_RELEASE_MASTER
 	    /* don't allow tasks on release master CPU */
 	     && task_cpu(tsk) != remote_edf(task_cpu(tsk))->release_master
 #endif
-		)
-		return 0;
+		) {
+
+		if (budget_enforced(tsk) || budget_signalled(tsk)) {
+			switch(get_drain_policy(tsk)) {
+				case DRAIN_SIMPLE:
+					init_budget_tracker(&tsk_rt(tsk)->budget, &psnedf_drain_simple_ops);
+					break;
+				default:
+					TRACE_TASK(tsk, "Unsupported budget draining mode.\n");
+					ret = -EINVAL;
+					break;
+			}
+		}
+	}
 	else
-		return -EINVAL;
+		ret = -EINVAL;
+
+	return ret;
 }
 
 /*	Plugin object	*/

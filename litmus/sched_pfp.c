@@ -137,33 +137,33 @@ static void job_completion(struct task_struct* t, int forced)
 static enum hrtimer_restart pfp_simple_on_exhausted(struct task_struct *t,
 				int in_schedule)
 {
-    /* Assumption: t is scheduled on the CPU executing this callback */
+	/* Assumption: t is scheduled on the CPU executing this callback */
 
-    if (budget_signalled(t) &&
+	if (budget_signalled(t) &&
 		!bt_flag_is_set(t, BTF_SIG_BUDGET_SENT)) {
-        /* signal exhaustion */
-        send_sigbudget(t); /* will set BTF_SIG_BUDGET_SENT */
-    }    
+		/* signal exhaustion */
+	send_sigbudget(t); /* will set BTF_SIG_BUDGET_SENT */
+	}
 
-    if (budget_enforced(t) &&
+	if (budget_enforced(t) &&
 		!bt_flag_test_and_set(t, BTF_BUDGET_EXHAUSTED)) {
-        if (!is_np(t)) {
-            /* np tasks will be preempted when they become
-             * preemptable again
-             */
-            litmus_reschedule_local();
-            TRACE("cedf_scheduler_tick: "
-                  "%d is preemptable "
-                  " => FORCE_RESCHED\n", t->pid);
-        } else if (is_user_np(t)) {
-            TRACE("cedf_scheduler_tick: "
-                  "%d is non-preemptable, "
-                  "preemption delayed.\n", t->pid);
-            request_exit_np(t);
-        }    
-    }    
+		if (!is_np(t)) {
+			/* np tasks will be preempted when they become
+			 * preemptable again
+			 */
+			litmus_reschedule_local();
+			TRACE("cedf_scheduler_tick: "
+				  "%d is preemptable "
+				  " => FORCE_RESCHED\n", t->pid);
+		} else if (is_user_np(t)) {
+			TRACE("cedf_scheduler_tick: "
+				  "%d is non-preemptable, "
+				  "preemption delayed.\n", t->pid);
+			request_exit_np(t);
+		}
+	}
 
-    return HRTIMER_NORESTART;
+	return HRTIMER_NORESTART;
 }
 
 static void pfp_tick(struct task_struct *t)
@@ -176,12 +176,12 @@ static void pfp_tick(struct task_struct *t)
 	 */
 	BUG_ON(is_realtime(t) && t != pfp->scheduled);
 
-    if (is_realtime(t) &&
-        tsk_rt(t)->budget.ops && budget_quantum_tracked(t) &&
-        budget_exhausted(t)) {
-        TRACE_TASK(t, "budget exhausted\n");
-        budget_state_machine2(t,on_exhausted,IN_SCHEDULE);
-    } 
+	if (is_realtime(t) &&
+		tsk_rt(t)->budget.ops && budget_quantum_tracked(t) &&
+		budget_exhausted(t)) {
+		TRACE_TASK(t, "budget exhausted\n");
+		budget_state_machine2(t,on_exhausted,IN_SCHEDULE);
+	}
 }
 
 static struct task_struct* pfp_schedule(struct task_struct * prev)

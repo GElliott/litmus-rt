@@ -861,6 +861,15 @@ static long pfair_admit_task(struct task_struct* t)
 		return -EINVAL;
 	}
 
+	if (budget_enforced(t) || budget_signalled(t)) {
+		/* TODO: Support DRAIN_SIMPLE. */
+		switch(get_drain_policy(t)) {
+			default:
+				TRACE_TASK(t, "Unsupported budget draining mode.\n");
+				return -EINVAL;
+		}
+	}
+
 	/* Pfair is a tick-based method, so the time
 	 * of interest is jiffies. Calculate tick-based
 	 * times for everything.

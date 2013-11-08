@@ -1199,7 +1199,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 #endif
 
 	/* Detect and handle budget exhaustion if it hasn't already been done.
-	 * Do this before acquring any locks. */
+	 * Do this before acquring any spinlocks. */
 	if (prev && is_realtime(prev) &&
 		budget_exhausted(prev)    &&
 		!is_completed(prev)       && /* don't bother jobs on their way out */
@@ -1423,7 +1423,7 @@ static void cedf_finish_switch(struct task_struct *prev)
 
 /*	Prepare a task for running in RT mode
  */
-static void cedf_task_new(struct task_struct * t, int on_rq, int running)
+static void cedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 {
 	unsigned long 		flags;
 	cpu_entry_t* 		entry;
@@ -1440,9 +1440,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 	/* setup job params */
 	release_at(t, litmus_clock());
 
-	t->rt_param.linked_on = NO_CPU;
-
-	if (running) {
+	if (is_scheduled) {
 		entry = &per_cpu(cedf_cpu_entries, task_cpu(t));
 		BUG_ON(entry->scheduled);
 
@@ -1461,6 +1459,7 @@ static void cedf_task_new(struct task_struct * t, int on_rq, int running)
 	} else {
 		t->rt_param.scheduled_on = NO_CPU;
 	}
+	t->rt_param.linked_on = NO_CPU;
 
 	if (is_running(t)) {
 		cedf_track_in_top_m(t);
@@ -1488,8 +1487,8 @@ static void cedf_task_wake_up(struct task_struct *t)
 		sched_trace_task_release(t);
 	}
 	else {
-		/* periodic task model.  don't force job to end.
-		 * rely on user to say when jobs complete or when budget expires. */
+		/* periodic task model.  don't force job to end. rely on user to say
+		   when jobs complete or when budget expires. */
 		tsk_rt(t)->completed = 0;
 	}
 

@@ -59,7 +59,7 @@ int nv_schedule_work_klmirqd(struct work_struct *work);
 #endif /* end LITMUS_SOFTIRQD */
 
 #ifdef CONFIG_LITMUS_NVIDIA_NONSPLIT_INTERRUPTS
-void nv_tasklet_schedule_now(struct tasklet_struct *t);
+int nv_tasklet_schedule_now(struct tasklet_struct *t);
 #endif
 
 /* call when the GPU-holding task, t, blocks */

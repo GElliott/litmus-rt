@@ -548,18 +548,16 @@ static void do_lit_tasklet(struct klmirqd_info* which,
 		/* execute tasklet if it has my priority and is free */
 		if (tasklet_trylock(t)) {
 			if (!atomic_read(&t->count)) {
-
-				sched_trace_tasklet_begin(NULL);
-
-				BUG_ON(!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state));
-
+				if(!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
+					BUG();
 				TRACE_CUR("%s: Invoking tasklet.\n", __FUNCTION__);
+
+				sched_trace_tasklet_begin(effective_priority(current));
 				t->func(t->data);
 				tasklet_unlock(t);
+				sched_trace_tasklet_end(effective_priority(current), 0ul);
 
 				atomic_dec(count);
-
-				sched_trace_tasklet_end(NULL, 0ul);
 
 				continue;  /* process more tasklets */
 			}
@@ -646,11 +644,15 @@ static void do_work(struct klmirqd_info* which)
 
 
 	TRACE_CUR("%s: Invoking work object.\n", __FUNCTION__);
+
 	/* do the work! */
 	work_clear_pending(work);
 	f = work->func;
+
+	sched_trace_work_begin(effective_priority(current), current);
 	f(work);  /* can't touch 'work' after this point,
 			   the user may have freed it. */
+	sched_trace_work_end(effective_priority(current), current, 0ul);
 
 	atomic_dec(&which->num_work_pending);
 

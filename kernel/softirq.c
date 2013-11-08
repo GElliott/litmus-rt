@@ -28,6 +28,7 @@
 
 #ifdef CONFIG_LITMUS_NVIDIA
 #include <litmus/nvidia_info.h>
+#include <litmus/sched_trace.h>
 #endif
 
 #define CREATE_TRACE_POINTS
@@ -530,8 +531,21 @@ static void tasklet_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
+#ifdef CONFIG_LITMUS_NVIDIA
+				if(unlikely(is_nvidia_func(t->func))) {
+					sched_trace_tasklet_begin(NULL);
+					t->func(t->data);
+					tasklet_unlock(t);
+					sched_trace_tasklet_end(NULL, 0ul);
+				}
+				else {
+					t->func(t->data);
+					tasklet_unlock(t);
+				}
+#else
 				t->func(t->data);
 				tasklet_unlock(t);
+#endif
 				continue;
 			}
 			tasklet_unlock(t);
@@ -565,8 +579,21 @@ static void tasklet_hi_action(struct softirq_action *a)
 			if (!atomic_read(&t->count)) {
 				if (!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
+#ifdef CONFIG_LITMUS_NVIDIA
+				if(unlikely(is_nvidia_func(t->func))) {
+					sched_trace_tasklet_begin(NULL);
+					t->func(t->data);
+					tasklet_unlock(t);
+					sched_trace_tasklet_end(NULL, 0ul);
+				}
+				else {
+					t->func(t->data);
+					tasklet_unlock(t);
+				}
+#else
 				t->func(t->data);
 				tasklet_unlock(t);
+#endif
 				continue;
 			}
 			tasklet_unlock(t);

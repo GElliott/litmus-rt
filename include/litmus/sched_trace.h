@@ -129,13 +129,13 @@ struct st_effective_priority_change_data {
 struct st_nv_interrupt_begin_data {
 	u64 when;
 	u32 device;
-	u32 serialNumber;
+	u32 unused;
 } __attribute__((packed));
 
 struct st_nv_interrupt_end_data {
 	u64 when;
 	u32 device;
-	u32 serialNumber;
+	u32 unused;
 } __attribute__((packed));
 
 struct st_migration_data {
@@ -261,46 +261,42 @@ feather_callback void do_sched_trace_sys_release(unsigned long id,
 
 
 feather_callback void do_sched_trace_tasklet_release(unsigned long id,
-												   struct task_struct* owner,
-												   u32 device);
+				struct task_struct* owner,
+				u32 device);
 feather_callback void do_sched_trace_tasklet_begin(unsigned long id,
-												  struct task_struct* owner);
+				struct task_struct* owner);
 feather_callback void do_sched_trace_tasklet_end(unsigned long id,
-												 struct task_struct* owner,
-												 unsigned long flushed);
+				struct task_struct* owner,
+				unsigned long flushed);
 
 feather_callback void do_sched_trace_work_release(unsigned long id,
-													 struct task_struct* owner,
-													 u32 device);
+				struct task_struct* owner,
+				u32 device);
 feather_callback void do_sched_trace_work_begin(unsigned long id,
-												struct task_struct* owner,
-												struct task_struct* exe);
+				struct task_struct* owner,
+				struct task_struct* exe);
 feather_callback void do_sched_trace_work_end(unsigned long id,
-											  struct task_struct* owner,
-											  struct task_struct* exe,
-											  unsigned long flushed);
+				struct task_struct* owner,
+				struct task_struct* exe,
+				unsigned long flushed);
 
 feather_callback void do_sched_trace_eff_prio_change(unsigned long id,
-											  struct task_struct* task,
-											  struct task_struct* inh);
+				struct task_struct* task,
+				struct task_struct* inh);
 
 feather_callback void do_sched_trace_nv_interrupt_begin(unsigned long id,
-												u32 device);
+				u32 device);
 feather_callback void do_sched_trace_nv_interrupt_end(unsigned long id,
-												unsigned long unused);
+				u32 device);
 
 feather_callback void do_sched_trace_migration(unsigned long id,
-											  struct task_struct* task,
-											  struct migration_info* mig_info);
+				struct task_struct* task,
+				struct migration_info* mig_info);
 
 feather_callback void do_sched_trace_lock(unsigned long id,
-										  struct task_struct* task,
-										  unsigned long lock_id,
-										  unsigned long acquired);
-
-/* returns true if we're tracing an interrupt on current CPU */
-/* int is_interrupt_tracing_active(void); */
-
+				struct task_struct* task,
+				unsigned long lock_id,
+				unsigned long acquired);
 #endif
 
 #else

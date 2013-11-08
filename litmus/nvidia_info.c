@@ -412,6 +412,7 @@ int nv_schedule_work(struct work_struct *work)
 		return 1;
 #endif
 	/* default to linux handler */
+	sched_trace_work_release(NULL, get_work_nv_device_num(work));
 	return queue_work(system_wq, work);
 }
 EXPORT_SYMBOL(nv_schedule_work);
@@ -425,6 +426,8 @@ void nv_tasklet_schedule(struct tasklet_struct *t)
 #elif defined(CONFIG_LITMUS_SOFTIRQD)
 	if (nv_tasklet_schedule_klmirqd(t, _litmus_tasklet_schedule))
 		return;
+#else
+	sched_trace_tasklet_release(NULL, get_tasklet_nv_device_num(t));
 #endif
 	/* default to linux handler */
 	___tasklet_schedule(t);
@@ -440,6 +443,8 @@ void nv_tasklet_hi_schedule(struct tasklet_struct *t)
 #elif defined(CONFIG_LITMUS_SOFTIRQD)
 	if (nv_tasklet_schedule_klmirqd(t, _litmus_tasklet_hi_schedule))
 		return;
+#else
+	sched_trace_tasklet_release(NULL, get_tasklet_nv_device_num(t));
 #endif
 	/* default to linux handler */
 	___tasklet_hi_schedule(t);
@@ -457,6 +462,8 @@ void nv_tasklet_hi_schedule_first(struct tasklet_struct *t)
 #elif defined(CONFIG_LITMUS_SOFTIRQD)
 	if (nv_tasklet_schedule_klmirqd(t, _litmus_tasklet_hi_schedule_first))
 		return;
+#else
+	sched_trace_tasklet_release(NULL, get_tasklet_nv_device_num(t));
 #endif
 	/* default to linux handler */
 	___tasklet_hi_schedule_first(t);
@@ -729,7 +736,9 @@ int nv_schedule_work_klmirqd(struct work_struct *work)
 			klmirqd_th->pid,
 			litmus_clock());
 
-		sched_trace_work_release(NULL, nvidia_device);
+		sched_trace_work_release(effective_priority(klmirqd_th),
+						nvidia_device);
+
 		if (likely(litmus_schedule_work(work, klmirqd_th))) {
 			unlock_nvklmworkqd_thread(nvidia_device, &flags);
 			return 1; /* success */
@@ -1007,11 +1016,15 @@ int nv_tasklet_schedule_klmirqd(struct tasklet_struct *t,
 	klmirqd_th = get_and_lock_nvklmirqd_thread(nvidia_device, &flags);
 
 	if (likely(klmirqd_th)) {
-		TRACE("Handling NVIDIA tasklet for device %u (klmirqd: %s/%d) at %llu\n",
+		TRACE("Handling NVIDIA tasklet for device %u "
+			"(klmirqd: %s/%d) at %llu\n",
 			nvidia_device,
 			klmirqd_th->comm,
 			klmirqd_th->pid,
 			litmus_clock());
+
+		sched_trace_tasklet_release(effective_priority(klmirqd_th),
+						nvidia_device);
 
 		if(likely(klmirqd_func(t, klmirqd_th))) {
 			unlock_nvklmirqd_thread(nvidia_device, &flags);
@@ -1026,14 +1039,19 @@ int nv_tasklet_schedule_klmirqd(struct tasklet_struct *t,
 int nv_tasklet_schedule_now(struct tasklet_struct *t)
 {
 	int success = 1;
+
+	sched_trace_tasklet_release(NULL, get_tasklet_nv_device_num(t));
+
 	TRACE("Handling NVIDIA tasklet.\n");
 
 	if(likely(tasklet_trylock(t))) {
 		if(likely(!atomic_read(&t->count))) {
-			if(unlikely(!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state)))
+			if(!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 				BUG();
+			sched_trace_tasklet_begin(NULL);
 			t->func(t->data);
 			tasklet_unlock(t);
+			sched_trace_tasklet_end(NULL, 0ul);
 		}
 		else {
 			success = 0;

@@ -316,11 +316,7 @@ feather_callback void do_sched_trace_tasklet_begin(unsigned long id,
 
 	if (rec) {
 		rec->data.tasklet_begin.when = now();
-
-		if(!in_interrupt())
-			rec->data.tasklet_begin.exe_pid = current->pid;
-		else
-			rec->data.tasklet_begin.exe_pid = 0;
+		rec->data.tasklet_begin.exe_pid = (!in_interrupt()) ? current->pid : 0;
 
 		put_record(rec);
 	}
@@ -337,11 +333,7 @@ feather_callback void do_sched_trace_tasklet_end(unsigned long id,
 	if (rec) {
 		rec->data.tasklet_end.when = now();
 		rec->data.tasklet_end.flushed = _flushed;
-
-		if(!in_interrupt())
-			rec->data.tasklet_end.exe_pid = current->pid;
-		else
-			rec->data.tasklet_end.exe_pid = 0;
+		rec->data.tasklet_end.exe_pid = (!in_interrupt()) ? current->pid : 0;
 
 		put_record(rec);
 	}
@@ -414,87 +406,28 @@ feather_callback void do_sched_trace_eff_prio_change(unsigned long id,
 	}
 }
 
-#if 0 /* PORT RECHECK */
-/* pray for no nesting of nv interrupts on same CPU... */
-struct tracing_interrupt_map
-{
-	int active;
-	int count;
-	unsigned long data[128]; // assume nesting less than 128...
-	unsigned long serial[128];
-};
-DEFINE_PER_CPU(struct tracing_interrupt_map, active_interrupt_tracing);
-
-
-DEFINE_PER_CPU(u32, intCounter);
-
 feather_callback void do_sched_trace_nv_interrupt_begin(unsigned long id,
 				unsigned long _device)
 {
-	struct st_event_record *rec;
-	u32 serialNum;
-
-	{
-		u32* serial;
-		struct tracing_interrupt_map* int_map = &per_cpu(active_interrupt_tracing, smp_processor_id());
-		if(!int_map->active == 0xcafebabe)
-		{
-			int_map->count++;
-		}
-		else
-		{
-			int_map->active = 0xcafebabe;
-			int_map->count = 1;
-		}
-		//int_map->data[int_map->count-1] = _device;
-
-		serial = &per_cpu(intCounter, smp_processor_id());
-		*serial += num_online_cpus();
-		serialNum = *serial;
-		int_map->serial[int_map->count-1] = serialNum;
-	}
-
-	rec = get_record(ST_NV_INTERRUPT_BEGIN, NULL);
+	struct st_event_record *rec = get_record(ST_NV_INTERRUPT_BEGIN, NULL);
 	if(rec) {
 		u32 device = _device;
 		rec->data.nv_interrupt_begin.when = now();
 		rec->data.nv_interrupt_begin.device = device;
-		rec->data.nv_interrupt_begin.serialNumber = serialNum;
 		put_record(rec);
 	}
 }
 EXPORT_SYMBOL(do_sched_trace_nv_interrupt_begin);
 
-/*
-int is_interrupt_tracing_active(void)
+feather_callback void do_sched_trace_nv_interrupt_end(unsigned long id,
+				unsigned long _device)
 {
-	struct tracing_interrupt_map* int_map = &per_cpu(active_interrupt_tracing, smp_processor_id());
-	if(int_map->active == 0xcafebabe)
-		return 1;
-	return 0;
-}
-*/
-
-feather_callback void do_sched_trace_nv_interrupt_end(unsigned long id, unsigned long _device)
-{
-	struct tracing_interrupt_map* int_map = &per_cpu(active_interrupt_tracing, smp_processor_id());
-	if(int_map->active == 0xcafebabe)
-	{
-		struct st_event_record *rec = get_record(ST_NV_INTERRUPT_END, NULL);
-
-		int_map->count--;
-		if(int_map->count == 0)
-			int_map->active = 0;
-
-		if(rec) {
-			u32 device = _device;
-			rec->data.nv_interrupt_end.when = now();
-			//rec->data.nv_interrupt_end.device = int_map->data[int_map->count];
-			rec->data.nv_interrupt_end.device = device;
-			rec->data.nv_interrupt_end.serialNumber = int_map->serial[int_map->count];
-			put_record(rec);
-		}
+	struct st_event_record *rec = get_record(ST_NV_INTERRUPT_END, NULL);
+	if(rec) {
+		u32 device = _device;
+		rec->data.nv_interrupt_end.when = now();
+		rec->data.nv_interrupt_end.device = device;
+		put_record(rec);
 	}
 }
 EXPORT_SYMBOL(do_sched_trace_nv_interrupt_end);
-#endif

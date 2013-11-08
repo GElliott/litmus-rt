@@ -48,6 +48,11 @@
 #include <linux/moduleparam.h>
 #include <linux/uaccess.h>
 
+#ifdef CONFIG_LITMUS_NVIDIA
+#include <litmus/nvidia_info.h>
+#include <litmus/sched_trace.h>
+#endif
+
 #include "workqueue_internal.h"
 
 enum {
@@ -2170,7 +2175,19 @@ __acquires(&pool->lock)
 	lock_map_acquire_read(&pwq->wq->lockdep_map);
 	lock_map_acquire(&lockdep_map);
 	trace_workqueue_execute_start(work);
+
+#ifdef CONFIG_LITMUS_NVIDIA
+	if(unlikely(is_nvidia_func(worker->current_func))) {
+		sched_trace_work_begin(NULL, current);
+		worker->current_func(work);
+		sched_trace_work_end(NULL, current, 0ul);
+	}
+	else
+		worker->current_func(work);
+#else
 	worker->current_func(work);
+#endif
+
 	/*
 	 * While we must be careful to not use "work" after this, the trace
 	 * point will only record its address.

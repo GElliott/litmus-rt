@@ -60,7 +60,7 @@
 #ifdef CONFIG_LITMUS_NESTED_LOCKING
 #include <litmus/fifo_lock.h>
 #include <litmus/prioq_lock.h>
-#include <litmus/ikglp_lock.h>
+#include <litmus/r2dglp_lock.h>
 #endif
 
 #ifdef CONFIG_REALTIME_AUX_TASKS
@@ -2173,19 +2173,19 @@ static struct litmus_lock* cedf_new_prioq_mutex(void)
 	return prioq_mutex_new(&cedf_prioq_mutex_lock_ops);
 }
 
-/* ******************** IKGLP ********************** */
+/* ******************** R2DGLP ********************** */
 
-static struct litmus_lock_ops cedf_ikglp_lock_ops = {
-	.lock   = ikglp_lock,
-	.unlock = ikglp_unlock,
+static struct litmus_lock_ops cedf_r2dglp_lock_ops = {
+	.lock   = r2dglp_lock,
+	.unlock = r2dglp_unlock,
 	.should_yield_lock = NULL,
-	.close  = ikglp_close,
-	.deallocate = ikglp_free,
+	.close  = r2dglp_close,
+	.deallocate = r2dglp_free,
 
-	.budget_exhausted		= ikglp_budget_exhausted,
-	.omlp_virtual_unlock	= ikglp_virtual_unlock,
+	.budget_exhausted		= r2dglp_budget_exhausted,
+	.omlp_virtual_unlock	= r2dglp_virtual_unlock,
 
-	// ikglp can only be an outer-most lock.
+	// r2dglp can only be an outer-most lock.
 	.propagate_increase_inheritance = NULL,
 	.propagate_decrease_inheritance = NULL,
 
@@ -2198,10 +2198,10 @@ static struct litmus_lock_ops cedf_ikglp_lock_ops = {
 	.is_omlp_family = 1,
 };
 
-static struct litmus_lock* cedf_new_ikglp(void* __user arg)
+static struct litmus_lock* cedf_new_r2dglp(void* __user arg)
 {
 	/* assumes clusters of uniform size. */
-	return ikglp_new(cluster_size, &cedf_ikglp_lock_ops, arg);
+	return r2dglp_new(cluster_size, &cedf_r2dglp_lock_ops, arg);
 }
 #endif /* end LITMUS_NESTED_LOCKING */
 
@@ -2250,8 +2250,8 @@ static long cedf_allocate_lock(struct litmus_lock **lock, int type,
 			*lock = cedf_new_prioq_mutex();
 			break;
 
-		case IKGLP_SEM:
-			*lock = cedf_new_ikglp(args);
+		case R2DGLP_SEM:
+			*lock = cedf_new_r2dglp(args);
 			break;
 #endif
 		case KFMLP_SEM:
@@ -2283,9 +2283,9 @@ cedf_kfmlp_affinity_ops __attribute__ ((unused)) = {
 
 #ifdef CONFIG_LITMUS_NESTED_LOCKING
 static struct affinity_observer_ops
-cedf_ikglp_affinity_ops __attribute__ ((unused)) = {
-	.close = ikglp_aff_obs_close,
-	.deallocate = ikglp_aff_obs_free,
+cedf_r2dglp_affinity_ops __attribute__ ((unused)) = {
+	.close = r2dglp_aff_obs_close,
+	.deallocate = r2dglp_aff_obs_free,
 };
 #endif
 
@@ -2307,13 +2307,13 @@ static long cedf_allocate_affinity_observer(struct affinity_observer **aff_obs,
 			break;
 
 #ifdef CONFIG_LITMUS_NESTED_LOCKING
-		case IKGLP_SIMPLE_GPU_AFF_OBS:
-			*aff_obs = ikglp_simple_gpu_aff_obs_new(&cedf_ikglp_affinity_ops,
+		case R2DGLP_SIMPLE_GPU_AFF_OBS:
+			*aff_obs = r2dglp_simple_gpu_aff_obs_new(&cedf_r2dglp_affinity_ops,
 							args);
 			break;
 
-		case IKGLP_GPU_AFF_OBS:
-			*aff_obs = ikglp_gpu_aff_obs_new(&cedf_ikglp_affinity_ops, args);
+		case R2DGLP_GPU_AFF_OBS:
+			*aff_obs = r2dglp_gpu_aff_obs_new(&cedf_r2dglp_affinity_ops, args);
 			break;
 #endif /* end LITMUS_NESTED_LOCKING */
 #endif /* end LITMUS_NVIDIA */

@@ -67,7 +67,7 @@ static int create_generic_lock(void** obj_ref, obj_type_t type,
 		INIT_BINHEAP_NODE(&lock->nest.hp_binheap_node);
 		if(!lock->nest.hp_waiter_ptr) {
 			TRACE_CUR("BEWARE: hp_waiter_ptr should probably not be NULL in "
-					  "most cases. (exception: IKGLP donors)\n");
+					  "most cases. (exception: R2DGLP donors)\n");
 		}
 #endif
 		lock->type = type;

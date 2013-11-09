@@ -135,12 +135,12 @@ struct gpu_affinity_observer_args
 	int relaxed_rules;
 };
 
-#define IKGLP_M_IN_FIFOS (0u)
-#define IKGLP_UNLIMITED_IN_FIFOS (~0u)
-#define IKGLP_OPTIMAL_FIFO_LEN (0u)
-#define IKGLP_UNLIMITED_FIFO_LEN (~0u)
+#define R2DGLP_M_IN_FIFOS (0u)
+#define R2DGLP_UNLIMITED_IN_FIFOS (~0u)
+#define R2DGLP_OPTIMAL_FIFO_LEN (0u)
+#define R2DGLP_UNLIMITED_FIFO_LEN (~0u)
 
-struct ikglp_args
+struct r2dglp_args
 {
 	unsigned int nr_replicas;
 	unsigned int max_in_fifos;

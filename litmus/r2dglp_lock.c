@@ -12,15 +12,15 @@
 #include <litmus/nvidia_info.h>
 #endif
 
-#include <litmus/ikglp_lock.h>
+#include <litmus/r2dglp_lock.h>
 
-#define IKGLP_INVAL_DISTANCE 0x7FFFFFFF
+#define R2DGLP_INVAL_DISTANCE 0x7FFFFFFF
 
-int ikglp_max_heap_base_priority_order(struct binheap_node *a,
+int r2dglp_max_heap_base_priority_order(struct binheap_node *a,
 				struct binheap_node *b)
 {
-	ikglp_heap_node_t *d_a = binheap_entry(a, ikglp_heap_node_t, node);
-	ikglp_heap_node_t *d_b = binheap_entry(b, ikglp_heap_node_t, node);
+	r2dglp_heap_node_t *d_a = binheap_entry(a, r2dglp_heap_node_t, node);
+	r2dglp_heap_node_t *d_b = binheap_entry(b, r2dglp_heap_node_t, node);
 
 	BUG_ON(!d_a);
 	BUG_ON(!d_b);
@@ -28,34 +28,34 @@ int ikglp_max_heap_base_priority_order(struct binheap_node *a,
 	return litmus->__compare(d_a->task, BASE, d_b->task, BASE);
 }
 
-int ikglp_min_heap_base_priority_order(struct binheap_node *a,
+int r2dglp_min_heap_base_priority_order(struct binheap_node *a,
 				struct binheap_node *b)
 {
-	ikglp_heap_node_t *d_a = binheap_entry(a, ikglp_heap_node_t, node);
-	ikglp_heap_node_t *d_b = binheap_entry(b, ikglp_heap_node_t, node);
+	r2dglp_heap_node_t *d_a = binheap_entry(a, r2dglp_heap_node_t, node);
+	r2dglp_heap_node_t *d_b = binheap_entry(b, r2dglp_heap_node_t, node);
 
 	return litmus->__compare(d_b->task, BASE, d_a->task, BASE);
 }
 
-int ikglp_donor_max_heap_base_priority_order(struct binheap_node *a,
+int r2dglp_donor_max_heap_base_priority_order(struct binheap_node *a,
 				struct binheap_node *b)
 {
-	ikglp_wait_state_t *d_a = binheap_entry(a, ikglp_wait_state_t, node);
-	ikglp_wait_state_t *d_b = binheap_entry(b, ikglp_wait_state_t, node);
+	r2dglp_wait_state_t *d_a = binheap_entry(a, r2dglp_wait_state_t, node);
+	r2dglp_wait_state_t *d_b = binheap_entry(b, r2dglp_wait_state_t, node);
 
 	return litmus->__compare(d_a->task, BASE, d_b->task, BASE);
 }
 
 
-int ikglp_min_heap_donee_order(struct binheap_node *a,
+int r2dglp_min_heap_donee_order(struct binheap_node *a,
 				struct binheap_node *b)
 {
 	struct task_struct *prio_a, *prio_b;
 
-	ikglp_donee_heap_node_t *d_a =
-		binheap_entry(a, ikglp_donee_heap_node_t, node);
-	ikglp_donee_heap_node_t *d_b =
-		binheap_entry(b, ikglp_donee_heap_node_t, node);
+	r2dglp_donee_heap_node_t *d_a =
+		binheap_entry(a, r2dglp_donee_heap_node_t, node);
+	r2dglp_donee_heap_node_t *d_b =
+		binheap_entry(b, r2dglp_donee_heap_node_t, node);
 
 	if(!d_a->donor_info) {
 		prio_a = d_a->task;
@@ -83,13 +83,13 @@ static inline unsigned int nominal_fq_len(struct fifo_queue *fq)
 	return (fq->count - fq->is_vunlocked);
 }
 
-static inline int ikglp_get_idx(struct ikglp_semaphore *sem,
+static inline int r2dglp_get_idx(struct r2dglp_semaphore *sem,
 				struct fifo_queue *queue)
 {
 	return (queue - &sem->fifo_queues[0]);
 }
 
-static inline struct fifo_queue* ikglp_get_queue(struct ikglp_semaphore *sem,
+static inline struct fifo_queue* r2dglp_get_queue(struct r2dglp_semaphore *sem,
 				struct task_struct *holder)
 {
 	struct fifo_queue *fq = NULL;
@@ -104,7 +104,7 @@ static inline struct fifo_queue* ikglp_get_queue(struct ikglp_semaphore *sem,
 	return(fq);
 }
 
-static struct task_struct* ikglp_find_hp_waiter(struct fifo_queue *kqueue,
+static struct task_struct* r2dglp_find_hp_waiter(struct fifo_queue *kqueue,
 				struct task_struct *skip)
 {
 	struct list_head *pos;
@@ -120,7 +120,7 @@ static struct task_struct* ikglp_find_hp_waiter(struct fifo_queue *kqueue,
 	return found;
 }
 
-static struct fifo_queue* ikglp_find_shortest(struct ikglp_semaphore *sem,
+static struct fifo_queue* r2dglp_find_shortest(struct r2dglp_semaphore *sem,
 				struct fifo_queue *search_start)
 {
 	/* we start our search at search_start instead of at the beginning of the
@@ -143,14 +143,14 @@ static struct fifo_queue* ikglp_find_shortest(struct ikglp_semaphore *sem,
 	return(shortest);
 }
 
-static inline struct task_struct* ikglp_mth_highest(struct ikglp_semaphore *sem)
+static inline struct task_struct* r2dglp_mth_highest(struct r2dglp_semaphore *sem)
 {
-	return binheap_top_entry(&sem->top_m, ikglp_heap_node_t, node)->task;
+	return binheap_top_entry(&sem->top_m, r2dglp_heap_node_t, node)->task;
 }
 
-static void ikglp_add_global_list(struct ikglp_semaphore *sem,
+static void r2dglp_add_global_list(struct r2dglp_semaphore *sem,
 				struct task_struct *t,
-				ikglp_heap_node_t *node)
+				r2dglp_heap_node_t *node)
 {
 	node->task = t;
 	INIT_BINHEAP_NODE(&node->node);
@@ -158,35 +158,35 @@ static void ikglp_add_global_list(struct ikglp_semaphore *sem,
 	if(sem->top_m_size < sem->max_in_fifos) {
 		TRACE_CUR("Trivially adding %s/%d to top-m global list.\n",
 				  t->comm, t->pid);
-		binheap_add(&node->node, &sem->top_m, ikglp_heap_node_t, node);
+		binheap_add(&node->node, &sem->top_m, r2dglp_heap_node_t, node);
 		++(sem->top_m_size);
 	}
-	else if(litmus->__compare(t, BASE, ikglp_mth_highest(sem), BASE)) {
-		ikglp_heap_node_t *evicted =
-			binheap_top_entry(&sem->top_m, ikglp_heap_node_t, node);
+	else if(litmus->__compare(t, BASE, r2dglp_mth_highest(sem), BASE)) {
+		r2dglp_heap_node_t *evicted =
+			binheap_top_entry(&sem->top_m, r2dglp_heap_node_t, node);
 
 		TRACE_CUR("Adding %s/%d to top-m and evicting %s/%d.\n",
 				  t->comm, t->pid,
 				  evicted->task->comm, evicted->task->pid);
 
-		binheap_delete_root(&sem->top_m, ikglp_heap_node_t, node);
+		binheap_delete_root(&sem->top_m, r2dglp_heap_node_t, node);
 		INIT_BINHEAP_NODE(&evicted->node);
-		binheap_add(&evicted->node, &sem->not_top_m, ikglp_heap_node_t, node);
+		binheap_add(&evicted->node, &sem->not_top_m, r2dglp_heap_node_t, node);
 
-		binheap_add(&node->node, &sem->top_m, ikglp_heap_node_t, node);
+		binheap_add(&node->node, &sem->top_m, r2dglp_heap_node_t, node);
 	}
 	else {
 		TRACE_CUR("Trivially adding %s/%d to not-top-m global list.\n",
 				  t->comm, t->pid);
 
-		binheap_add(&node->node, &sem->not_top_m, ikglp_heap_node_t, node);
+		binheap_add(&node->node, &sem->not_top_m, r2dglp_heap_node_t, node);
 	}
 }
 
 
-static void ikglp_del_global_list(struct ikglp_semaphore *sem,
+static void r2dglp_del_global_list(struct r2dglp_semaphore *sem,
 				struct task_struct *t,
-				ikglp_heap_node_t *node)
+				r2dglp_heap_node_t *node)
 {
 	BUG_ON(!binheap_is_in_heap(&node->node));
 
@@ -198,16 +198,16 @@ static void ikglp_del_global_list(struct ikglp_semaphore *sem,
 		binheap_delete(&node->node, &sem->top_m);
 
 		if(!binheap_empty(&sem->not_top_m)) {
-			ikglp_heap_node_t *promoted =
-				binheap_top_entry(&sem->not_top_m, ikglp_heap_node_t, node);
+			r2dglp_heap_node_t *promoted =
+				binheap_top_entry(&sem->not_top_m, r2dglp_heap_node_t, node);
 
 			TRACE_CUR("Promoting %s/%d to top-m\n",
 					  promoted->task->comm, promoted->task->pid);
 
-			binheap_delete_root(&sem->not_top_m, ikglp_heap_node_t, node);
+			binheap_delete_root(&sem->not_top_m, r2dglp_heap_node_t, node);
 			INIT_BINHEAP_NODE(&promoted->node);
 
-			binheap_add(&promoted->node, &sem->top_m, ikglp_heap_node_t, node);
+			binheap_add(&promoted->node, &sem->top_m, r2dglp_heap_node_t, node);
 		}
 		else {
 			TRACE_CUR("No one to promote to top-m.\n");
@@ -222,23 +222,23 @@ static void ikglp_del_global_list(struct ikglp_semaphore *sem,
 }
 
 
-static void ikglp_add_donees(struct ikglp_semaphore *sem,
+static void r2dglp_add_donees(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
 				struct task_struct *t,
-				ikglp_donee_heap_node_t* node)
+				r2dglp_donee_heap_node_t* node)
 {
 	node->task = t;
 	node->donor_info = NULL;
 	node->fq = fq;
 	INIT_BINHEAP_NODE(&node->node);
 
-	binheap_add(&node->node, &sem->donees, ikglp_donee_heap_node_t, node);
+	binheap_add(&node->node, &sem->donees, r2dglp_donee_heap_node_t, node);
 }
 
 
-static void ikglp_refresh_owners_prio_increase(struct task_struct *t,
+static void r2dglp_refresh_owners_prio_increase(struct task_struct *t,
 				struct fifo_queue *fq,
-				struct ikglp_semaphore *sem,
+				struct r2dglp_semaphore *sem,
 				unsigned long flags)
 {
 	/* priority of 't' has increased (note: 't' might already be hp_waiter). */
@@ -260,7 +260,7 @@ static void ikglp_refresh_owners_prio_increase(struct task_struct *t,
 
 			if (unlikely(binheap_empty(&tsk_rt(owner)->hp_blocked_tasks))) {
 				TRACE_TASK(owner, "not drawing inheritance from fq %d.\n",
-								ikglp_get_idx(sem, fq));
+								r2dglp_get_idx(sem, fq));
 				raw_spin_unlock(&tsk_rt(owner)->hp_blocked_tasks_lock);
 				WARN_ON(1);
 				return;
@@ -320,8 +320,8 @@ static void ikglp_refresh_owners_prio_increase(struct task_struct *t,
 }
 
 /* hp_waiter has decreased */
-static void ikglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
-				struct ikglp_semaphore *sem,
+static void r2dglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
+				struct r2dglp_semaphore *sem,
 				unsigned long flags,
 				int budget_triggered)
 {
@@ -336,13 +336,13 @@ static void ikglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
 		return;
 	}
 
-	TRACE_CUR("ikglp_refresh_owners_prio_decrease\n");
+	TRACE_CUR("r2dglp_refresh_owners_prio_decrease\n");
 
 	raw_spin_lock(&tsk_rt(owner)->hp_blocked_tasks_lock);
 
 	if (unlikely(binheap_empty(&tsk_rt(owner)->hp_blocked_tasks))) {
 		TRACE_TASK(owner, "not drawing inheritance from fq %d.\n",
-						ikglp_get_idx(sem, fq));
+						r2dglp_get_idx(sem, fq));
 		raw_spin_unlock(&tsk_rt(owner)->hp_blocked_tasks_lock);
 		unlock_fine_irqrestore(&sem->lock, flags);
 		WARN_ON(1);
@@ -366,7 +366,7 @@ static void ikglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
 		struct task_struct *decreased_prio;
 
 		TRACE_CUR("Propagating decreased inheritance to holder of fq %d.\n",
-				  ikglp_get_idx(sem, fq));
+				  r2dglp_get_idx(sem, fq));
 
 		if(litmus->__compare(new_max_eff_prio, BASE, owner, BASE)) {
 			TRACE_CUR("%s/%d has greater base priority than base priority "
@@ -375,7 +375,7 @@ static void ikglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
 					  (new_max_eff_prio) ? new_max_eff_prio->pid : 0,
 					  owner->comm,
 					  owner->pid,
-					  ikglp_get_idx(sem, fq));
+					  r2dglp_get_idx(sem, fq));
 
 			decreased_prio = new_max_eff_prio;
 		}
@@ -386,7 +386,7 @@ static void ikglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
 					  (new_max_eff_prio) ? new_max_eff_prio->pid : 0,
 					  owner->comm,
 					  owner->pid,
-					  ikglp_get_idx(sem, fq));
+					  r2dglp_get_idx(sem, fq));
 
 			decreased_prio = NULL;
 		}
@@ -404,9 +404,9 @@ static void ikglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
 }
 
 
-static void ikglp_remove_donation_from_owner(struct binheap_node *n,
+static void r2dglp_remove_donation_from_owner(struct binheap_node *n,
 				struct fifo_queue *fq,
-				struct ikglp_semaphore *sem,
+				struct r2dglp_semaphore *sem,
 				unsigned long flags)
 {
 	struct task_struct *owner = fq->owner;
@@ -431,18 +431,18 @@ static void ikglp_remove_donation_from_owner(struct binheap_node *n,
 		struct task_struct *decreased_prio;
 
 		TRACE_CUR("Propagating decreased inheritance to holder of fq %d.\n",
-				  ikglp_get_idx(sem, fq));
+				  r2dglp_get_idx(sem, fq));
 
 		if(litmus->__compare(new_max_eff_prio, BASE, owner, BASE)) {
 			TRACE_CUR("has greater base priority than base priority of owner "
 					  "of fq %d.\n",
-					  ikglp_get_idx(sem, fq));
+					  r2dglp_get_idx(sem, fq));
 			decreased_prio = new_max_eff_prio;
 		}
 		else {
 			TRACE_CUR("has lesser base priority than base priority of owner of "
 					  "fq %d.\n",
-					  ikglp_get_idx(sem, fq));
+					  r2dglp_get_idx(sem, fq));
 			decreased_prio = NULL;
 		}
 
@@ -458,7 +458,7 @@ static void ikglp_remove_donation_from_owner(struct binheap_node *n,
 	}
 }
 
-static void ikglp_remove_donation_from_fq_waiter(struct task_struct *t,
+static void r2dglp_remove_donation_from_fq_waiter(struct task_struct *t,
 				struct binheap_node *n)
 {
 	struct task_struct *old_max_eff_prio;
@@ -497,13 +497,13 @@ static void ikglp_remove_donation_from_fq_waiter(struct task_struct *t,
 	raw_spin_unlock(&tsk_rt(t)->hp_blocked_tasks_lock);
 }
 
-static void ikglp_get_immediate(struct task_struct* t,
+static void r2dglp_get_immediate(struct task_struct* t,
 				struct fifo_queue *fq,
-				struct ikglp_semaphore *sem,
+				struct r2dglp_semaphore *sem,
 				unsigned long flags)
 {
 	/* resource available now */
-	TRACE_CUR("queue %d: acquired immediately\n", ikglp_get_idx(sem, fq));
+	TRACE_CUR("queue %d: acquired immediately\n", r2dglp_get_idx(sem, fq));
 
 	fq->owner = t;
 
@@ -517,11 +517,11 @@ static void ikglp_get_immediate(struct task_struct* t,
 	/* even though we got the replica, we're still considered in the fifo */
 	++(sem->nr_in_fifos);
 
-	ikglp_add_global_list(sem, t, &fq->global_heap_node);
-	ikglp_add_donees(sem, fq, t, &fq->donee_heap_node);
+	r2dglp_add_global_list(sem, t, &fq->global_heap_node);
+	r2dglp_add_donees(sem, fq, t, &fq->donee_heap_node);
 
 	sem->shortest_fifo_queue =
-			ikglp_find_shortest(sem, sem->shortest_fifo_queue);
+			r2dglp_find_shortest(sem, sem->shortest_fifo_queue);
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	if(sem->aff_obs) {
@@ -534,17 +534,17 @@ static void ikglp_get_immediate(struct task_struct* t,
 }
 
 
-static void __ikglp_enqueue_on_fq(struct ikglp_semaphore *sem,
+static void __r2dglp_enqueue_on_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
-				ikglp_wait_state_t *wait,
-				ikglp_heap_node_t *global_heap_node,
-				ikglp_donee_heap_node_t *donee_heap_node)
+				r2dglp_wait_state_t *wait,
+				r2dglp_heap_node_t *global_heap_node,
+				r2dglp_donee_heap_node_t *donee_heap_node)
 {
 	struct task_struct *t = wait->task;
 
 	/* resource is not free => must suspend and wait */
 	TRACE_TASK(t, "Enqueuing on fq %d.\n",
-			   ikglp_get_idx(sem, fq));
+			   r2dglp_get_idx(sem, fq));
 
 	init_waitqueue_entry(&wait->fq_node, t);
 
@@ -557,80 +557,80 @@ static void __ikglp_enqueue_on_fq(struct ikglp_semaphore *sem,
 	if(likely(global_heap_node)) {
 		if(binheap_is_in_heap(&global_heap_node->node)) {
 			WARN_ON(1);
-			ikglp_del_global_list(sem, t, global_heap_node);
+			r2dglp_del_global_list(sem, t, global_heap_node);
 		}
-		ikglp_add_global_list(sem, t, global_heap_node);
+		r2dglp_add_global_list(sem, t, global_heap_node);
 	}
 	// update donor eligiblity list.
 	if(likely(donee_heap_node))
-		ikglp_add_donees(sem, fq, t, donee_heap_node);
+		r2dglp_add_donees(sem, fq, t, donee_heap_node);
 
 	if(sem->shortest_fifo_queue == fq)
-		sem->shortest_fifo_queue = ikglp_find_shortest(sem, fq);
+		sem->shortest_fifo_queue = r2dglp_find_shortest(sem, fq);
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	if(sem->aff_obs)
 		sem->aff_obs->ops->notify_enqueue(sem->aff_obs, fq, t);
 #endif
 
-	wait->cur_q = IKGLP_FQ;
+	wait->cur_q = R2DGLP_FQ;
 	wait->fq = fq;
 	mb();
 
-	TRACE_TASK(t, "shortest queue is now %d\n", ikglp_get_idx(sem, fq));
+	TRACE_TASK(t, "shortest queue is now %d\n", r2dglp_get_idx(sem, fq));
 }
 
 
-static void ikglp_enqueue_on_fq(struct ikglp_semaphore *sem,
+static void r2dglp_enqueue_on_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
-				ikglp_wait_state_t *wait,
+				r2dglp_wait_state_t *wait,
 				unsigned long flags)
 {
 	/* resource is not free => must suspend and wait */
 	TRACE_TASK(wait->task, "queue %d: Resource is not free => must suspend "
 			   "and wait.\n",
-			   ikglp_get_idx(sem, fq));
+			   r2dglp_get_idx(sem, fq));
 
 	INIT_BINHEAP_NODE(&wait->global_heap_node.node);
 	INIT_BINHEAP_NODE(&wait->donee_heap_node.node);
 
-	__ikglp_enqueue_on_fq(sem, fq, wait,
+	__r2dglp_enqueue_on_fq(sem, fq, wait,
 					&wait->global_heap_node, &wait->donee_heap_node);
 
 	/* call unlocks sem->lock */
-	ikglp_refresh_owners_prio_increase(wait->task, fq, sem, flags);
+	r2dglp_refresh_owners_prio_increase(wait->task, fq, sem, flags);
 }
 
 
-static void __ikglp_enqueue_on_pq(struct ikglp_semaphore *sem,
-				ikglp_wait_state_t *wait)
+static void __r2dglp_enqueue_on_pq(struct r2dglp_semaphore *sem,
+				r2dglp_wait_state_t *wait)
 {
 	TRACE_TASK(wait->task, "goes to PQ.\n");
 
 	wait->pq_node.task = wait->task; /* copy over task (little redundant...) */
 
 	binheap_add(&wait->pq_node.node, &sem->priority_queue,
-				ikglp_heap_node_t, node);
+				r2dglp_heap_node_t, node);
 
-	wait->cur_q = IKGLP_PQ;
+	wait->cur_q = R2DGLP_PQ;
 }
 
-static void ikglp_enqueue_on_pq(struct ikglp_semaphore *sem,
-				ikglp_wait_state_t *wait)
+static void r2dglp_enqueue_on_pq(struct r2dglp_semaphore *sem,
+				r2dglp_wait_state_t *wait)
 {
 	INIT_BINHEAP_NODE(&wait->global_heap_node.node);
 	INIT_BINHEAP_NODE(&wait->donee_heap_node.node);
 	INIT_BINHEAP_NODE(&wait->pq_node.node);
 
-	__ikglp_enqueue_on_pq(sem, wait);
+	__r2dglp_enqueue_on_pq(sem, wait);
 }
 
-static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
-				ikglp_wait_state_t* wait,
+static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
+				r2dglp_wait_state_t* wait,
 				unsigned long flags)
 {
 	struct task_struct *t = wait->task;
-	ikglp_donee_heap_node_t *donee_node = NULL;
+	r2dglp_donee_heap_node_t *donee_node = NULL;
 	struct task_struct *donee;
 
 	struct task_struct *old_max_eff_prio;
@@ -643,15 +643,15 @@ static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
 	INIT_BINHEAP_NODE(&wait->node);
 
 	/* Add donor to the global list. */
-	ikglp_add_global_list(sem, t, &wait->global_heap_node);
+	r2dglp_add_global_list(sem, t, &wait->global_heap_node);
 
 	/* Select a donee */
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	donee_node = (sem->aff_obs) ?
 		sem->aff_obs->ops->advise_donee_selection(sem->aff_obs, t) :
-		binheap_top_entry(&sem->donees, ikglp_donee_heap_node_t, node);
+		binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
 #else
-	donee_node = binheap_top_entry(&sem->donees, ikglp_donee_heap_node_t, node);
+	donee_node = binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
 #endif
 
 	donee = donee_node->task;
@@ -667,7 +667,7 @@ static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
 	wait->donee_info = donee_node;
 
 	/* Add t to donor heap. */
-	binheap_add(&wait->node, &sem->donors, ikglp_wait_state_t, node);
+	binheap_add(&wait->node, &sem->donors, r2dglp_wait_state_t, node);
 
 	/* Now adjust the donee's priority. */
 
@@ -680,7 +680,7 @@ static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
 		/* Steal donation relation.  Evict old donor to PQ. */
 
 		/* Remove old donor from donor heap */
-		ikglp_wait_state_t *old_wait = donee_node->donor_info;
+		r2dglp_wait_state_t *old_wait = donee_node->donor_info;
 		struct task_struct *old_donor = old_wait->task;
 
 		TRACE_TASK(t, "Donee (%s/%d) had donor %s/%d. "
@@ -695,10 +695,10 @@ static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
 		/* WARNING: have not updated inh_prio! */
 
 		/* Add old donor to PQ. */
-		__ikglp_enqueue_on_pq(sem, old_wait);
+		__r2dglp_enqueue_on_pq(sem, old_wait);
 
 		/* Remove old donor from the global heap. */
-		ikglp_del_global_list(sem, old_donor, &old_wait->global_heap_node);
+		r2dglp_del_global_list(sem, old_donor, &old_wait->global_heap_node);
 	}
 
 	/* Add back donee's node to the donees heap with increased prio */
@@ -706,7 +706,7 @@ static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
 
 	donee_node->donor_info = wait;
 	INIT_BINHEAP_NODE(&donee_node->node);
-	binheap_add(&donee_node->node, &sem->donees, ikglp_donee_heap_node_t, node);
+	binheap_add(&donee_node->node, &sem->donees, r2dglp_donee_heap_node_t, node);
 
 	/* Add an inheritance/donation to the donee's inheritance heap. */
 	wait->prio_donation.lock = (struct litmus_lock*)sem;
@@ -741,7 +741,7 @@ static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
 			raw_spin_unlock(&tsk_rt(donee)->hp_blocked_tasks_lock);
 
             /* call unlocks sem->lock */
-			ikglp_refresh_owners_prio_increase(donee, donee_fq, sem, flags);
+			r2dglp_refresh_owners_prio_increase(donee, donee_fq, sem, flags);
 		}
 		else {
 			TRACE_TASK(t, "%s/%d is the owner. "
@@ -760,14 +760,14 @@ static void ikglp_enqueue_on_donor(struct ikglp_semaphore *sem,
 		unlock_fine_irqrestore(&sem->lock, flags);
 	}
 
-	wait->cur_q = IKGLP_DONOR;
+	wait->cur_q = R2DGLP_DONOR;
 }
 
 
-int ikglp_lock(struct litmus_lock* l)
+int r2dglp_lock(struct litmus_lock* l)
 {
 	struct task_struct* t = current;
-	struct ikglp_semaphore *sem = ikglp_from_lock(l);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(l);
 	unsigned long flags = 0, more_flags;
 	struct fifo_queue *fq = NULL;
 	int replica = -EINVAL;
@@ -776,7 +776,7 @@ int ikglp_lock(struct litmus_lock* l)
 	raw_spinlock_t *dgl_lock;
 #endif
 
-	ikglp_wait_state_t wait;
+	r2dglp_wait_state_t wait;
 
 	if (!is_realtime(t))
 		return -EPERM;
@@ -804,11 +804,11 @@ int ikglp_lock(struct litmus_lock* l)
 #endif
 		if(fq->count == 0) {
 			/* take available resource */
-			replica = ikglp_get_idx(sem, fq);
+			replica = r2dglp_get_idx(sem, fq);
 
 			TRACE_CUR("Getting replica %d\n", replica);
 
-			ikglp_get_immediate(t, fq, sem, flags);  /* unlocks sem->lock */
+			r2dglp_get_immediate(t, fq, sem, flags);  /* unlocks sem->lock */
 
 			raw_spin_unlock_irqrestore(&sem->real_lock, more_flags);
 			unlock_global_irqrestore(dgl_lock, flags);
@@ -825,7 +825,7 @@ int ikglp_lock(struct litmus_lock* l)
 
 			set_task_state(t, TASK_UNINTERRUPTIBLE);
 
-			ikglp_enqueue_on_fq(sem, fq, &wait, flags);  /* unlocks sem->lock */
+			r2dglp_enqueue_on_fq(sem, fq, &wait, flags);  /* unlocks sem->lock */
 		}
 	}
 	else {
@@ -840,16 +840,16 @@ int ikglp_lock(struct litmus_lock* l)
 		/* FIXME: interruptible would be nice some day */
 		set_task_state(t, TASK_UNINTERRUPTIBLE);
 
-		if(litmus->__compare(ikglp_mth_highest(sem), BASE, t, BASE)) {
+		if(litmus->__compare(r2dglp_mth_highest(sem), BASE, t, BASE)) {
 			TRACE_CUR("Going on PQ heap.\n");
 			/* enqueue on PQ */
-			ikglp_enqueue_on_pq(sem, &wait);
+			r2dglp_enqueue_on_pq(sem, &wait);
 			unlock_fine_irqrestore(&sem->lock, flags);
 		}
 		else {
 			/* enqueue as donor */
 			TRACE_CUR("Going on donor heap.\n");
-			ikglp_enqueue_on_donor(sem, &wait, flags);	 /* unlocks sem->lock */
+			r2dglp_enqueue_on_donor(sem, &wait, flags);	 /* unlocks sem->lock */
 		}
 	}
 
@@ -870,7 +870,7 @@ int ikglp_lock(struct litmus_lock* l)
 
 	tsk_rt(t)->blocked_lock_data = 0;
 
-	replica = ikglp_get_idx(sem, fq);
+	replica = r2dglp_get_idx(sem, fq);
 
 acquired:
 	TRACE_CUR("Acquired lock %d, queue %d\n", l->ident, replica);
@@ -883,70 +883,70 @@ acquired:
 	return replica;
 }
 
-static void __drop_from_donor(struct ikglp_semaphore *sem,
-				ikglp_wait_state_t *wait)
+static void __drop_from_donor(struct r2dglp_semaphore *sem,
+				r2dglp_wait_state_t *wait)
 {
-	BUG_ON(wait->cur_q != IKGLP_DONOR);
+	BUG_ON(wait->cur_q != R2DGLP_DONOR);
 
 	TRACE_TASK(wait->task, "is being dropped from donor heap.\n");
 
 	binheap_delete(&wait->node, &sem->donors);
-	wait->cur_q = IKGLP_INVL;
+	wait->cur_q = R2DGLP_INVL;
 }
 
-static void ikglp_move_donor_to_fq(struct ikglp_semaphore *sem,
+static void r2dglp_move_donor_to_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
-				ikglp_wait_state_t *donor_info)
+				r2dglp_wait_state_t *donor_info)
 {
 	struct task_struct *t = donor_info->task;
 
 	TRACE_CUR("Donor %s/%d being moved to fq %d\n",
 			  t->comm,
 			  t->pid,
-			  ikglp_get_idx(sem, fq));
+			  r2dglp_get_idx(sem, fq));
 
 	__drop_from_donor(sem, donor_info);
 
     /* Already in global_list, so pass null to prevent adding 2nd time. */
-	__ikglp_enqueue_on_fq(sem, fq, donor_info,
+	__r2dglp_enqueue_on_fq(sem, fq, donor_info,
 						  NULL, /* pass NULL */
 						  &donor_info->donee_heap_node);
 
-    /* Note: ikglp_update_owners_prio() still needs to be called. */
+    /* Note: r2dglp_update_owners_prio() still needs to be called. */
 }
 
-static void __drop_from_pq(struct ikglp_semaphore *sem,
-				ikglp_wait_state_t *wait)
+static void __drop_from_pq(struct r2dglp_semaphore *sem,
+				r2dglp_wait_state_t *wait)
 {
-	BUG_ON(wait->cur_q != IKGLP_PQ);
+	BUG_ON(wait->cur_q != R2DGLP_PQ);
 
 	TRACE_TASK(wait->task, "is being dropped from the PQ.\n");
 
 	binheap_delete(&wait->pq_node.node, &sem->priority_queue);
-	wait->cur_q = IKGLP_INVL;
+	wait->cur_q = R2DGLP_INVL;
 }
 
-static void ikglp_move_pq_to_fq(struct ikglp_semaphore *sem,
+static void r2dglp_move_pq_to_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
-				ikglp_wait_state_t *wait)
+				r2dglp_wait_state_t *wait)
 {
 	struct task_struct *t = wait->task;
 
 	TRACE_CUR("PQ request %s/%d being moved to fq %d\n",
 			  t->comm,
 			  t->pid,
-			  ikglp_get_idx(sem, fq));
+			  r2dglp_get_idx(sem, fq));
 
 	__drop_from_pq(sem, wait);
-	__ikglp_enqueue_on_fq(sem, fq, wait,
+	__r2dglp_enqueue_on_fq(sem, fq, wait,
 						  &wait->global_heap_node,
 						  &wait->donee_heap_node);
 
-    /* Note: ikglp_update_owners_prio() still needs to be called. */
+    /* Note: r2dglp_update_owners_prio() still needs to be called. */
 }
 
-static ikglp_wait_state_t* ikglp_find_hp_waiter_to_steal(
-	struct ikglp_semaphore* sem,
+static r2dglp_wait_state_t* r2dglp_find_hp_waiter_to_steal(
+	struct r2dglp_semaphore* sem,
 	struct fifo_queue* skip)
 {
 	/* must hold sem->lock */
@@ -962,10 +962,10 @@ static ikglp_wait_state_t* ikglp_find_hp_waiter_to_steal(
 
 			TRACE_CUR("hp_waiter on fq %d (%s/%d) has higher prio than "
                       "hp_waiter on fq %d (%s/%d)\n",
-					  ikglp_get_idx(sem, &sem->fifo_queues[i]),
+					  r2dglp_get_idx(sem, &sem->fifo_queues[i]),
 					  sem->fifo_queues[i].hp_waiter->comm,
 					  sem->fifo_queues[i].hp_waiter->pid,
-					  (fq) ? ikglp_get_idx(sem, fq) : 0,
+					  (fq) ? r2dglp_get_idx(sem, fq) : 0,
 					  (fq) ? ((fq->hp_waiter) ? fq->hp_waiter->comm : "null") : "nullXX",
 					  (fq) ? ((fq->hp_waiter) ? fq->hp_waiter->pid : 0) : -2);
 
@@ -977,12 +977,12 @@ static ikglp_wait_state_t* ikglp_find_hp_waiter_to_steal(
 
 	if(fq) {
 		struct task_struct *max_hp = fq->hp_waiter;
-		ikglp_wait_state_t* ret = NULL;
+		r2dglp_wait_state_t* ret = NULL;
 
 		TRACE_CUR("Searching for %s/%d on fq %d\n",
 				  max_hp->comm,
 				  max_hp->pid,
-				  ikglp_get_idx(sem, fq));
+				  r2dglp_get_idx(sem, fq));
 
 		BUG_ON(!max_hp);
 
@@ -992,14 +992,14 @@ static ikglp_wait_state_t* ikglp_find_hp_waiter_to_steal(
 			queued  = (struct task_struct*) wait->private;
 
 			TRACE_CUR("fq %d entry: %s/%d\n",
-					  ikglp_get_idx(sem, fq),
+					  r2dglp_get_idx(sem, fq),
 					  queued->comm,
 					  queued->pid);
 
 			/* Compare task prios, find high prio task. */
 			if (queued == max_hp) {
 				TRACE_CUR("Found it!\n");
-				ret = container_of(wait, ikglp_wait_state_t, fq_node);
+				ret = container_of(wait, r2dglp_wait_state_t, fq_node);
 			}
 		}
 
@@ -1010,13 +1010,13 @@ static ikglp_wait_state_t* ikglp_find_hp_waiter_to_steal(
 	return(NULL);
 }
 
-static void __drop_from_fq(struct ikglp_semaphore *sem,
-				ikglp_wait_state_t *wait)
+static void __drop_from_fq(struct r2dglp_semaphore *sem,
+				r2dglp_wait_state_t *wait)
 {
 	struct task_struct *t = wait->task;
 	struct fifo_queue *fq = wait->fq;
 
-	BUG_ON(wait->cur_q != IKGLP_FQ);
+	BUG_ON(wait->cur_q != R2DGLP_FQ);
 	BUG_ON(!fq);
 
 	TRACE_TASK(t, "is being dropped from fq.\n");
@@ -1030,9 +1030,9 @@ static void __drop_from_fq(struct ikglp_semaphore *sem,
 #endif
 
 	if(t == fq->hp_waiter) {
-		fq->hp_waiter = ikglp_find_hp_waiter(fq, NULL);
+		fq->hp_waiter = r2dglp_find_hp_waiter(fq, NULL);
 		TRACE_TASK(t, "New hp_waiter for fq %d is %s/%d!\n",
-				   ikglp_get_idx(sem, fq),
+				   r2dglp_get_idx(sem, fq),
 				   (fq->hp_waiter) ? fq->hp_waiter->comm : "null",
 				   (fq->hp_waiter) ? fq->hp_waiter->pid : 0);
 	}
@@ -1042,42 +1042,42 @@ static void __drop_from_fq(struct ikglp_semaphore *sem,
 		sem->shortest_fifo_queue = fq;
 	--(sem->nr_in_fifos);
 
-	wait->cur_q = IKGLP_INVL;
+	wait->cur_q = R2DGLP_INVL;
 }
 
-static void ikglp_steal_to_fq(struct ikglp_semaphore *sem,
+static void r2dglp_steal_to_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
-				ikglp_wait_state_t *fq_wait)
+				r2dglp_wait_state_t *fq_wait)
 {
 	WARN_ON(fq_wait->fq != fq_wait->donee_heap_node.fq);
 	__drop_from_fq(sem, fq_wait);
 
 	fq_wait->donee_heap_node.fq = fq;  // just to be safe
-	__ikglp_enqueue_on_fq(sem, fq, fq_wait, NULL, NULL);
+	__r2dglp_enqueue_on_fq(sem, fq, fq_wait, NULL, NULL);
 
 	/* Note: We have not checked the priority inheritance of fq's owner yet. */
 }
 
 
-static void ikglp_migrate_fq_to_owner_heap_nodes(struct ikglp_semaphore *sem,
+static void r2dglp_migrate_fq_to_owner_heap_nodes(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
-				ikglp_wait_state_t *old_wait)
+				r2dglp_wait_state_t *old_wait)
 {
 	struct task_struct *t = old_wait->task;
 
 	BUG_ON(old_wait->donee_heap_node.fq != fq);
 
 	TRACE_TASK(t, "Migrating wait_state to memory of queue %d.\n",
-			   ikglp_get_idx(sem, fq));
+			   r2dglp_get_idx(sem, fq));
 
     /* Need to migrate global_heap_node and donee_heap_node off of the stack
 	   to the nodes allocated for the owner of this fq. */
 
 	/* TODO: Enhance binheap() to perform this operation in place. */
 
-	ikglp_del_global_list(sem, t, &old_wait->global_heap_node); /* remove */
+	r2dglp_del_global_list(sem, t, &old_wait->global_heap_node); /* remove */
 	fq->global_heap_node = old_wait->global_heap_node;			/* copy */
-	ikglp_add_global_list(sem, t, &fq->global_heap_node);		/* re-add */
+	r2dglp_add_global_list(sem, t, &fq->global_heap_node);		/* re-add */
 
 	binheap_delete(&old_wait->donee_heap_node.node, &sem->donees);  /* remove */
 	fq->donee_heap_node = old_wait->donee_heap_node;  /* copy */
@@ -1092,32 +1092,32 @@ static void ikglp_migrate_fq_to_owner_heap_nodes(struct ikglp_semaphore *sem,
 	}
 	INIT_BINHEAP_NODE(&fq->donee_heap_node.node);
 	binheap_add(&fq->donee_heap_node.node, &sem->donees,
-				ikglp_donee_heap_node_t, node);  /* re-add */
+				r2dglp_donee_heap_node_t, node);  /* re-add */
 }
 
 
 
-void ikglp_grant_replica_to_next(struct ikglp_semaphore *sem,
+void r2dglp_grant_replica_to_next(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq)
 {
 	wait_queue_t *wait;
-	ikglp_wait_state_t *fq_wait;
+	r2dglp_wait_state_t *fq_wait;
 	struct task_struct *next;
 
 	BUG_ON(!waitqueue_active(&fq->wait));
 
 	wait = list_entry(fq->wait.task_list.next, wait_queue_t, task_list);
-	fq_wait = container_of(wait, ikglp_wait_state_t, fq_node);
+	fq_wait = container_of(wait, r2dglp_wait_state_t, fq_node);
 	next = (struct task_struct*) wait->private;
 
 	__remove_wait_queue(&fq->wait, wait);
 
 	TRACE_CUR("queue %d: ASSIGNING %s/%d as owner - next\n",
-			  ikglp_get_idx(sem, fq),
+			  r2dglp_get_idx(sem, fq),
 			  next->comm, next->pid);
 
 	/* migrate wait-state to fifo-memory. */
-	ikglp_migrate_fq_to_owner_heap_nodes(sem, fq, fq_wait);
+	r2dglp_migrate_fq_to_owner_heap_nodes(sem, fq, fq_wait);
 
 	/* next becomes the resouce holder */
 	fq->owner = next;
@@ -1135,9 +1135,9 @@ void ikglp_grant_replica_to_next(struct ikglp_semaphore *sem,
 		 * inherit.  However, we need to make sure that the
 		 * next-highest priority in the queue is reflected in
 		 * hp_waiter. */
-		fq->hp_waiter = ikglp_find_hp_waiter(fq, NULL);
+		fq->hp_waiter = r2dglp_find_hp_waiter(fq, NULL);
 		TRACE_TASK(next, "New hp_waiter for fq %d is %s/%d!\n",
-				   ikglp_get_idx(sem, fq),
+				   r2dglp_get_idx(sem, fq),
 				   (fq->hp_waiter) ? fq->hp_waiter->comm : "null",
 				   (fq->hp_waiter) ? fq->hp_waiter->pid : 0);
 
@@ -1161,7 +1161,7 @@ void ikglp_grant_replica_to_next(struct ikglp_semaphore *sem,
 		 * then it (probably) ought to inherit the highest-priority
 		 * waiter's priority. */
 		TRACE_TASK(next, "is not hp_waiter of replica %d. hp_waiter is %s/%d\n",
-				   ikglp_get_idx(sem, fq),
+				   r2dglp_get_idx(sem, fq),
 				   (fq->hp_waiter) ? fq->hp_waiter->comm : "null",
 				   (fq->hp_waiter) ? fq->hp_waiter->pid : 0);
 
@@ -1201,10 +1201,10 @@ void ikglp_grant_replica_to_next(struct ikglp_semaphore *sem,
 #define ALLOW_STEALING				1
 #define ALWAYS_TERMINATE_DONATION	1
 
-void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
+void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
 				struct task_struct *t,
-				ikglp_donee_heap_node_t *donee_node,
+				r2dglp_donee_heap_node_t *donee_node,
 				unsigned long *flags,
 				int allow_stealing,
 				int always_terminate_donation)
@@ -1213,12 +1213,12 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 	struct task_struct *new_on_fq = NULL;
 	struct fifo_queue *fq_of_new_on_fq = NULL;
 
-	ikglp_wait_state_t *other_donor_info = NULL;
+	r2dglp_wait_state_t *other_donor_info = NULL;
 	struct fifo_queue *to_steal = NULL;
 	int need_steal_prio_reeval = 0;
 
 	if (donee_node->donor_info) {
-		ikglp_wait_state_t *donor_info = donee_node->donor_info;
+		r2dglp_wait_state_t *donor_info = donee_node->donor_info;
 
 		new_on_fq = donor_info->task;
 
@@ -1245,10 +1245,10 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 		TRACE_TASK(t, "Moving MY donor (%s/%d) to fq %d "
 				   "(non-aff wanted fq %d).\n",
 				   new_on_fq->comm, new_on_fq->pid,
-				   ikglp_get_idx(sem, fq_of_new_on_fq),
-				   ikglp_get_idx(sem, fq));
+				   r2dglp_get_idx(sem, fq_of_new_on_fq),
+				   r2dglp_get_idx(sem, fq));
 
-		ikglp_move_donor_to_fq(sem, fq_of_new_on_fq, donor_info);
+		r2dglp_move_donor_to_fq(sem, fq_of_new_on_fq, donor_info);
 
 		/* treat donor as if it had donated to a task other than 't'.
 		 * this triggers the termination of the donation relationship. */
@@ -1259,10 +1259,10 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 		other_donor_info = (sem->aff_obs) ?
 			sem->aff_obs->ops->advise_donor_to_fq(sem->aff_obs, fq) :
-			binheap_top_entry(&sem->donors, ikglp_wait_state_t, node);
+			binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
 #else
 		other_donor_info =
-				binheap_top_entry(&sem->donors, ikglp_wait_state_t, node);
+				binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
 #endif
 
 		new_on_fq = other_donor_info->task;
@@ -1292,15 +1292,15 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 		TRACE_TASK(t, "Moving a donor (%s/%d) to fq %d "
 				   "(non-aff wanted fq %d).\n",
 				   new_on_fq->comm, new_on_fq->pid,
-				   ikglp_get_idx(sem, fq_of_new_on_fq),
-				   ikglp_get_idx(sem, fq));
+				   r2dglp_get_idx(sem, fq_of_new_on_fq),
+				   r2dglp_get_idx(sem, fq));
 
-		ikglp_move_donor_to_fq(sem, fq_of_new_on_fq, other_donor_info);
+		r2dglp_move_donor_to_fq(sem, fq_of_new_on_fq, other_donor_info);
 	}
 	else if(!binheap_empty(&sem->priority_queue)) {  /* No donors, so move PQ */
-		ikglp_heap_node_t *pq_node = binheap_top_entry(&sem->priority_queue,
-						ikglp_heap_node_t, node);
-		ikglp_wait_state_t *pq_wait = container_of(pq_node, ikglp_wait_state_t,
+		r2dglp_heap_node_t *pq_node = binheap_top_entry(&sem->priority_queue,
+						r2dglp_heap_node_t, node);
+		r2dglp_wait_state_t *pq_wait = container_of(pq_node, r2dglp_wait_state_t,
 						pq_node);
 
 		new_on_fq = pq_wait->task;
@@ -1325,25 +1325,25 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 		TRACE_TASK(t, "Moving a pq waiter (%s/%d) to fq %d "
 				   "(non-aff wanted fq %d).\n",
 				   new_on_fq->comm, new_on_fq->pid,
-				   ikglp_get_idx(sem, fq_of_new_on_fq),
-				   ikglp_get_idx(sem, fq));
+				   r2dglp_get_idx(sem, fq_of_new_on_fq),
+				   r2dglp_get_idx(sem, fq));
 
-		ikglp_move_pq_to_fq(sem, fq_of_new_on_fq, pq_wait);
+		r2dglp_move_pq_to_fq(sem, fq_of_new_on_fq, pq_wait);
 	}
 	else if(allow_stealing && fq->count == 0) {
 		/* No PQ and this queue is empty, so steal. */
 
-		ikglp_wait_state_t *fq_wait;
+		r2dglp_wait_state_t *fq_wait;
 
 		TRACE_TASK(t, "Looking to steal a request for fq %d...\n",
-				   ikglp_get_idx(sem, fq));
+				   r2dglp_get_idx(sem, fq));
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 		fq_wait = (sem->aff_obs) ?
 			sem->aff_obs->ops->advise_steal(sem->aff_obs, fq) :
-			ikglp_find_hp_waiter_to_steal(sem, fq);
+			r2dglp_find_hp_waiter_to_steal(sem, fq);
 #else
-		fq_wait = ikglp_find_hp_waiter_to_steal(sem, fq);
+		fq_wait = r2dglp_find_hp_waiter_to_steal(sem, fq);
 #endif
 
 		if(fq_wait) {
@@ -1355,14 +1355,14 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 
 			TRACE_TASK(t, "Found %s/%d of fq %d to steal for fq %d...\n",
 					   new_on_fq->comm, new_on_fq->pid,
-					   ikglp_get_idx(sem, to_steal),
-					   ikglp_get_idx(sem, fq));
+					   r2dglp_get_idx(sem, to_steal),
+					   r2dglp_get_idx(sem, fq));
 
-			ikglp_steal_to_fq(sem, fq, fq_wait);
+			r2dglp_steal_to_fq(sem, fq, fq_wait);
 		}
 		else {
 			TRACE_TASK(t, "Found nothing to steal for fq %d.\n",
-					   ikglp_get_idx(sem, fq));
+					   r2dglp_get_idx(sem, fq));
 		}
 	}
 	else {
@@ -1393,9 +1393,9 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 		if(donee == other_fq->owner) {
 			TRACE_TASK(t, "Donee %s/%d is an owner of fq %d.\n",
 					   donee->comm, donee->pid,
-					   ikglp_get_idx(sem, other_fq));
+					   r2dglp_get_idx(sem, other_fq));
 
-			ikglp_remove_donation_from_owner(&other_donor_info->prio_donation.hp_binheap_node,
+			r2dglp_remove_donation_from_owner(&other_donor_info->prio_donation.hp_binheap_node,
 							other_fq, sem, *flags);
 
             /* there should be no contention!!!! */
@@ -1404,24 +1404,24 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 		else {
 			TRACE_TASK(t, "Donee %s/%d is blocked in of fq %d.\n",
 					   donee->comm, donee->pid,
-					   ikglp_get_idx(sem, other_fq));
+					   r2dglp_get_idx(sem, other_fq));
 
-			ikglp_remove_donation_from_fq_waiter(donee,
+			r2dglp_remove_donation_from_fq_waiter(donee,
 							&other_donor_info->prio_donation.hp_binheap_node);
 			if(donee == other_fq->hp_waiter) {
 				TRACE_TASK(t, "Donee %s/%d was an hp_waiter of fq %d. "
                            "Rechecking hp_waiter.\n",
 						   donee->comm, donee->pid,
-						   ikglp_get_idx(sem, other_fq));
+						   r2dglp_get_idx(sem, other_fq));
 
-				other_fq->hp_waiter = ikglp_find_hp_waiter(other_fq, NULL);
+				other_fq->hp_waiter = r2dglp_find_hp_waiter(other_fq, NULL);
 				TRACE_TASK(t, "New hp_waiter for fq %d is %s/%d!\n",
-						   ikglp_get_idx(sem, other_fq),
+						   r2dglp_get_idx(sem, other_fq),
 						   (other_fq->hp_waiter) ? other_fq->hp_waiter->comm : "null",
 						   (other_fq->hp_waiter) ? other_fq->hp_waiter->pid : 0);
 
                 /* unlocks sem->lock. reacquire it. */
-				ikglp_refresh_owners_prio_decrease(other_fq, sem, *flags, 0);
+				r2dglp_refresh_owners_prio_decrease(other_fq, sem, *flags, 0);
                 /* there should be no contention!!!! */
 				lock_fine_irqsave(&sem->lock, *flags);
 			}
@@ -1430,11 +1430,11 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 	else if(to_steal) {
 		TRACE_TASK(t, "Rechecking priority inheritance of fq %d, "
                    "triggered by stealing.\n",
-				   ikglp_get_idx(sem, to_steal));
+				   r2dglp_get_idx(sem, to_steal));
 
 		if(need_steal_prio_reeval) {
             /* unlocks sem->lock. reacquire it. */
-			ikglp_refresh_owners_prio_decrease(to_steal, sem, *flags, 0);
+			r2dglp_refresh_owners_prio_decrease(to_steal, sem, *flags, 0);
             /* there should be no contention!!!! */
 			lock_fine_irqsave(&sem->lock, *flags);
 		}
@@ -1443,7 +1443,7 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 	/* check for new HP waiter. */
 	if(new_on_fq) {
         /* unlocks sem->lock. reacquire it. */
-		ikglp_refresh_owners_prio_increase(new_on_fq, fq_of_new_on_fq,
+		r2dglp_refresh_owners_prio_increase(new_on_fq, fq_of_new_on_fq,
 						sem, *flags);
         /* there should be no contention!!!! */
 		lock_fine_irqsave(&sem->lock, *flags);
@@ -1453,13 +1453,13 @@ void ikglp_move_next_to_fq(struct ikglp_semaphore *sem,
 	if(unlikely(fq_of_new_on_fq &&
 				fq_of_new_on_fq != fq &&
 				fq_of_new_on_fq->count == 1)) {
-		ikglp_grant_replica_to_next(sem, fq_of_new_on_fq);
+		r2dglp_grant_replica_to_next(sem, fq_of_new_on_fq);
 	}
 }
 
-int ikglp_unlock(struct litmus_lock* l)
+int r2dglp_unlock(struct litmus_lock* l)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(l);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(l);
 	struct task_struct *t = current;
 	struct fifo_queue *fq;
 
@@ -1471,7 +1471,7 @@ int ikglp_unlock(struct litmus_lock* l)
 
 	int err = 0;
 
-	fq = ikglp_get_queue(sem, t);  /* returns NULL if 't' is not owner. */
+	fq = r2dglp_get_queue(sem, t);  /* returns NULL if 't' is not owner. */
 
 	if (!fq) {
 		TRACE_TASK(t, "does not hold a replica of lock %d\n", l->ident);
@@ -1486,10 +1486,10 @@ int ikglp_unlock(struct litmus_lock* l)
 	raw_spin_lock_irqsave(&sem->real_lock, more_flags);
 	lock_fine_irqsave(&sem->lock, flags);
 
-	TRACE_TASK(t, "Freeing replica %d.\n", ikglp_get_idx(sem, fq));
+	TRACE_TASK(t, "Freeing replica %d.\n", r2dglp_get_idx(sem, fq));
 
 	/* Remove 't' from the heaps, but data in nodes will still be good. */
-	ikglp_del_global_list(sem, t, &fq->global_heap_node);
+	r2dglp_del_global_list(sem, t, &fq->global_heap_node);
 	binheap_delete(&fq->donee_heap_node.node, &sem->donees);
 
 	fq->owner = NULL;  /* no longer owned!! */
@@ -1512,14 +1512,14 @@ int ikglp_unlock(struct litmus_lock* l)
 
 	/* 't' must drop all priority and clean up data structures before hand-off.
 
-	   DROP ALL INHERITANCE.  IKGLP MUST BE OUTER-MOST
+	   DROP ALL INHERITANCE.  R2DGLP MUST BE OUTER-MOST
 	   This kills any inheritance from a donor.
      */
 	raw_spin_lock(&tsk_rt(t)->hp_blocked_tasks_lock);
 	{
 		int count = 0;
 
-		TRACE_TASK(t, "discarding inheritance because IKGLP is outermost\n");
+		TRACE_TASK(t, "discarding inheritance because R2DGLP is outermost\n");
 
 		while(!binheap_empty(&tsk_rt(t)->hp_blocked_tasks)) {
 			binheap_delete_root(&tsk_rt(t)->hp_blocked_tasks,
@@ -1535,7 +1535,7 @@ int ikglp_unlock(struct litmus_lock* l)
 	if (likely(!fq->is_vunlocked)) {
 		/* Move the next request into the FQ and update heaps as needed.
 		   Skip this step we already did this during the virtual unlock. */
-		ikglp_move_next_to_fq(sem, fq, t, &fq->donee_heap_node, &flags,
+		r2dglp_move_next_to_fq(sem, fq, t, &fq->donee_heap_node, &flags,
 						ALLOW_STEALING, !ALWAYS_TERMINATE_DONATION);
 	}
 	else {
@@ -1544,7 +1544,7 @@ int ikglp_unlock(struct litmus_lock* l)
     }
 
 	if (waitqueue_active(&fq->wait))
-		ikglp_grant_replica_to_next(sem, fq);
+		r2dglp_grant_replica_to_next(sem, fq);
 
 	unlock_fine_irqrestore(&sem->lock, flags);
 	raw_spin_unlock_irqrestore(&sem->real_lock, more_flags);
@@ -1558,30 +1558,30 @@ out:
 
 
 
-void ikglp_abort_request(struct ikglp_semaphore *sem, struct task_struct *t,
+void r2dglp_abort_request(struct r2dglp_semaphore *sem, struct task_struct *t,
 				unsigned long flags)
 {
-	ikglp_wait_state_t *wait =
-			(ikglp_wait_state_t*)tsk_rt(t)->blocked_lock_data;
-	ikglp_donee_heap_node_t	*donee_info;
+	r2dglp_wait_state_t *wait =
+			(r2dglp_wait_state_t*)tsk_rt(t)->blocked_lock_data;
+	r2dglp_donee_heap_node_t	*donee_info;
 	struct task_struct	*donee;
 	struct fifo_queue	*donee_fq;
 	struct fifo_queue	*fq = wait->fq;
 
 	BUG_ON(!wait);
 
-	/* drop the request from the proper IKGLP data structure and re-eval
+	/* drop the request from the proper R2DGLP data structure and re-eval
 	 * priority relations */
 	switch(wait->cur_q)
 	{
-		case IKGLP_PQ:
+		case R2DGLP_PQ:
 			/* No one inherits from waiters in PQ. Just drop the request. */
 			__drop_from_pq(sem, wait);
 			break;
 
 
-		case IKGLP_FQ:
-			ikglp_del_global_list(sem, t, &wait->global_heap_node);
+		case R2DGLP_FQ:
+			r2dglp_del_global_list(sem, t, &wait->global_heap_node);
 			binheap_delete(&wait->donee_heap_node.node, &sem->donees);
 
 			/* remove the task from the FQ */
@@ -1595,7 +1595,7 @@ void ikglp_abort_request(struct ikglp_semaphore *sem, struct task_struct *t,
 			raw_spin_lock(&tsk_rt(t)->hp_blocked_tasks_lock);
 			{
 				int count = 0;
-				TRACE_TASK(t, "discarding inheritance because IKGLP "
+				TRACE_TASK(t, "discarding inheritance because R2DGLP "
 							  "is outermost\n");
 
 				while(!binheap_empty(&tsk_rt(t)->hp_blocked_tasks)) {
@@ -1609,17 +1609,17 @@ void ikglp_abort_request(struct ikglp_semaphore *sem, struct task_struct *t,
 			raw_spin_unlock(&tsk_rt(t)->hp_blocked_tasks_lock);
 
             /* unlocks sem->lock. reacquire it. */
-			ikglp_refresh_owners_prio_decrease(wait->donee_heap_node.fq,
+			r2dglp_refresh_owners_prio_decrease(wait->donee_heap_node.fq,
 							sem, flags, 1);
             /* there should be no contention!!!! */
 			lock_fine_irqsave(&sem->lock, flags);
-			ikglp_move_next_to_fq(sem, fq, t, &wait->donee_heap_node, &flags,
+			r2dglp_move_next_to_fq(sem, fq, t, &wait->donee_heap_node, &flags,
 							ALLOW_STEALING, !ALWAYS_TERMINATE_DONATION);
 			break;
 
 
-		case IKGLP_DONOR:
-			ikglp_del_global_list(sem, t, &wait->global_heap_node);
+		case R2DGLP_DONOR:
+			r2dglp_del_global_list(sem, t, &wait->global_heap_node);
 			__drop_from_donor(sem, wait);
 
 			/* update donee */
@@ -1632,9 +1632,9 @@ void ikglp_abort_request(struct ikglp_semaphore *sem, struct task_struct *t,
 			if (donee == donee_fq->owner) {
 				TRACE_TASK(t, "Donee %s/%d is an owner of fq %d.\n",
 						   donee->comm, donee->pid,
-						   ikglp_get_idx(sem, donee_fq));
+						   r2dglp_get_idx(sem, donee_fq));
                 /* unlocks sem->lock. reacquire it. */
-				ikglp_remove_donation_from_owner(&wait->prio_donation.hp_binheap_node,
+				r2dglp_remove_donation_from_owner(&wait->prio_donation.hp_binheap_node,
 								donee_fq, sem, flags);
                 /* there should be no contention!!!! */
 				lock_fine_irqsave(&sem->lock, flags);
@@ -1642,24 +1642,24 @@ void ikglp_abort_request(struct ikglp_semaphore *sem, struct task_struct *t,
 			else {
 				TRACE_TASK(t, "Donee %s/%d is blocked in of fq %d.\n",
 						   donee->comm, donee->pid,
-						   ikglp_get_idx(sem, donee_fq));
+						   r2dglp_get_idx(sem, donee_fq));
 
-				ikglp_remove_donation_from_fq_waiter(donee,
+				r2dglp_remove_donation_from_fq_waiter(donee,
 								&wait->prio_donation.hp_binheap_node);
 				if(donee == donee_fq->hp_waiter) {
 					TRACE_TASK(t, "Donee %s/%d was an hp_waiter of fq %d. "
 							   "Rechecking hp_waiter.\n",
 							   donee->comm, donee->pid,
-							   ikglp_get_idx(sem, donee_fq));
+							   r2dglp_get_idx(sem, donee_fq));
 
-					donee_fq->hp_waiter = ikglp_find_hp_waiter(donee_fq, NULL);
+					donee_fq->hp_waiter = r2dglp_find_hp_waiter(donee_fq, NULL);
 					TRACE_TASK(t, "New hp_waiter for fq %d is %s/%d!\n",
-							   ikglp_get_idx(sem, donee_fq),
+							   r2dglp_get_idx(sem, donee_fq),
 							   (donee_fq->hp_waiter) ? donee_fq->hp_waiter->comm : "null",
 							   (donee_fq->hp_waiter) ? donee_fq->hp_waiter->pid : 0);
 
                     /* unlocks sem->lock. reacquire it. */
-					ikglp_refresh_owners_prio_decrease(donee_fq, sem, flags, 1);
+					r2dglp_refresh_owners_prio_decrease(donee_fq, sem, flags, 1);
                     /* there should be no contention!!!! */
 					lock_fine_irqsave(&sem->lock, flags);
 				}
@@ -1670,10 +1670,10 @@ void ikglp_abort_request(struct ikglp_semaphore *sem, struct task_struct *t,
 			BUG();
 	}
 
-	BUG_ON(wait->cur_q != IKGLP_INVL); /* state should now be invalid */
+	BUG_ON(wait->cur_q != R2DGLP_INVL); /* state should now be invalid */
 }
 
-void ikglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
+void r2dglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
 {
 	/*
 	 * PRE: (1) Our deadline has already been postponed.
@@ -1686,7 +1686,7 @@ void ikglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
 	 * step 3: reissue the request
 	 */
 
-	struct ikglp_semaphore *sem = ikglp_from_lock(l);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(l);
 	struct litmus_lock* blocked_lock;
 	unsigned long flags = 0, more_flags;
 
@@ -1695,15 +1695,15 @@ void ikglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
 
 	blocked_lock = tsk_rt(t)->blocked_lock;
 	if (blocked_lock == l) {
-		ikglp_wait_state_t *wait;
-		ikglp_abort_request(sem, t, flags);
+		r2dglp_wait_state_t *wait;
+		r2dglp_abort_request(sem, t, flags);
 
 		/* now re-issue the request */
 
 		TRACE_TASK(t, "Reissuing a request for replica from lock %d.\n",
 						l->ident);
 
-		wait = (ikglp_wait_state_t*)tsk_rt(t)->blocked_lock_data;
+		wait = (r2dglp_wait_state_t*)tsk_rt(t)->blocked_lock_data;
 		if(sem->nr_in_fifos < sem->max_in_fifos) {
 
 			struct fifo_queue *fq;
@@ -1719,18 +1719,18 @@ void ikglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
 			TRACE_TASK(t, "is going to an FQ.\n");
 			/* if this were true, then we should have been blocked */
 			BUG_ON(fq->count == 0);
-			ikglp_enqueue_on_fq(sem, fq, wait, flags);  /* unlocks sem->lock */
+			r2dglp_enqueue_on_fq(sem, fq, wait, flags);  /* unlocks sem->lock */
 		}
-		else if(litmus->__compare(ikglp_mth_highest(sem), BASE, t, BASE)) {
+		else if(litmus->__compare(r2dglp_mth_highest(sem), BASE, t, BASE)) {
 			TRACE_TASK(t, "is going to PQ.\n");
 			/* enqueue on PQ */
-			ikglp_enqueue_on_pq(sem, wait);
+			r2dglp_enqueue_on_pq(sem, wait);
 			unlock_fine_irqrestore(&sem->lock, flags);
 		}
 		else {
 			/* enqueue as donor */
 			TRACE_TASK(t, "is going to donor heap.\n");
-			ikglp_enqueue_on_donor(sem, wait, flags);	 /* unlocks sem->lock */
+			r2dglp_enqueue_on_donor(sem, wait, flags);	 /* unlocks sem->lock */
 		}
 
 		raw_spin_unlock_irqrestore(&sem->real_lock, more_flags);
@@ -1739,7 +1739,7 @@ void ikglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
 		unlock_fine_irqrestore(&sem->lock, flags);
 		raw_spin_unlock_irqrestore(&sem->real_lock, more_flags);
 
-		TRACE_TASK(t, "is blocked, but not on IKGLP. Redirecting...\n");
+		TRACE_TASK(t, "is blocked, but not on R2DGLP. Redirecting...\n");
 		if(blocked_lock->ops->supports_budget_exhaustion) {
 			TRACE_TASK(t, "Lock %d supports budget exhaustion.\n",
 					   blocked_lock->ident);
@@ -1755,12 +1755,12 @@ void ikglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
 	return;
 }
 
-void ikglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t)
+void r2dglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t)
 {
 	/* PRE: DGL lock already held if DGLs are supported */
 
-	struct ikglp_semaphore *sem = ikglp_from_lock(l);
-	struct fifo_queue *fq = ikglp_get_queue(sem, t);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(l);
+	struct fifo_queue *fq = r2dglp_get_queue(sem, t);
 	unsigned long flags = 0, more_flags;
 
 	TRACE_TASK(t, "virtual unlock!\n");
@@ -1785,7 +1785,7 @@ void ikglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t)
 	 * other FQs.  Also, terminate donation relationship if we move
 	 * a donor to 't' to the FQ (we'll pick inheritance back up via
 	 * the FQ, if needed). */
-	ikglp_move_next_to_fq(sem, fq, t, &fq->donee_heap_node, &flags,
+	r2dglp_move_next_to_fq(sem, fq, t, &fq->donee_heap_node, &flags,
 					!ALLOW_STEALING, ALWAYS_TERMINATE_DONATION);
 
 	/* decrement fifo count to simulate unlock. individual fifo
@@ -1800,10 +1800,10 @@ out:
 
 
 
-int ikglp_close(struct litmus_lock* l)
+int r2dglp_close(struct litmus_lock* l)
 {
 	struct task_struct *t = current;
-	struct ikglp_semaphore *sem = ikglp_from_lock(l);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(l);
 	unsigned long flags;
 
 	int owner = 0;
@@ -1821,25 +1821,25 @@ int ikglp_close(struct litmus_lock* l)
 	raw_spin_unlock_irqrestore(&sem->real_lock, flags);
 
 	if (owner)
-		ikglp_unlock(l);
+		r2dglp_unlock(l);
 
 	return 0;
 }
 
-void ikglp_free(struct litmus_lock* l)
+void r2dglp_free(struct litmus_lock* l)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(l);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(l);
 
 	kfree(sem->fifo_queues);
 	kfree(sem);
 }
 
-struct litmus_lock* ikglp_new(unsigned int m,
+struct litmus_lock* r2dglp_new(unsigned int m,
 				struct litmus_lock_ops* ops,
 				void* __user uarg)
 {
-	struct ikglp_semaphore* sem;
-	struct ikglp_args args;
+	struct r2dglp_semaphore* sem;
+	struct r2dglp_args args;
 	unsigned int i;
 
 	BUG_ON(m <= 0);
@@ -1856,16 +1856,16 @@ struct litmus_lock* ikglp_new(unsigned int m,
 		printk("Invalid number of replicas.\n");
 		return(NULL);
 	}
-	/* IKGLP_OPTIMAL_FIFO_LEN can only be determined if nr_max_holders
-	   is IKGLP_M_HOLDERS (number of CPUs) */
-	if (args.max_fifo_len == IKGLP_OPTIMAL_FIFO_LEN &&
-		args.max_in_fifos != IKGLP_M_IN_FIFOS) {
+	/* R2DGLP_OPTIMAL_FIFO_LEN can only be determined if nr_max_holders
+	   is R2DGLP_M_HOLDERS (number of CPUs) */
+	if (args.max_fifo_len == R2DGLP_OPTIMAL_FIFO_LEN &&
+		args.max_in_fifos != R2DGLP_M_IN_FIFOS) {
 		printk("Cannot compute optimal FIFO length if "
-			   "max_in_fifos != IKGLP_M_IN_FIFOS\n");
+			   "max_in_fifos != R2DGLP_M_IN_FIFOS\n");
 		return(NULL);
 	}
-	if ((args.max_in_fifos != IKGLP_UNLIMITED_IN_FIFOS) &&
-		(args.max_fifo_len != IKGLP_UNLIMITED_FIFO_LEN) &&
+	if ((args.max_in_fifos != R2DGLP_UNLIMITED_IN_FIFOS) &&
+		(args.max_fifo_len != R2DGLP_UNLIMITED_FIFO_LEN) &&
 		(args.max_in_fifos > args.nr_replicas*args.max_fifo_len)) {
 		printk("Not enough total FIFO space for specified max requests "
 			   "in FIFOs.\n");
@@ -1886,7 +1886,7 @@ struct litmus_lock* ikglp_new(unsigned int m,
 	}
 
 	sem->litmus_lock.ops = ops;
-//	sem->litmus_lock.proc = &ikglp_proc_ops;
+//	sem->litmus_lock.proc = &r2dglp_proc_ops;
 
 	raw_spin_lock_init(&sem->lock);
 	LOCKDEP_DYNAMIC_ALLOC(sem, &sem->lock);
@@ -1894,16 +1894,16 @@ struct litmus_lock* ikglp_new(unsigned int m,
 	raw_spin_lock_init(&sem->real_lock);
 
 	sem->nr_replicas = args.nr_replicas;
-	sem->max_in_fifos = (args.max_in_fifos == IKGLP_M_IN_FIFOS) ?
+	sem->max_in_fifos = (args.max_in_fifos == R2DGLP_M_IN_FIFOS) ?
 		m :
 		args.max_in_fifos;
-	sem->max_fifo_len = (args.max_fifo_len == IKGLP_OPTIMAL_FIFO_LEN) ?
+	sem->max_fifo_len = (args.max_fifo_len == R2DGLP_OPTIMAL_FIFO_LEN) ?
 		(sem->max_in_fifos/args.nr_replicas) +
 			((sem->max_in_fifos%args.nr_replicas) != 0) :
 		args.max_fifo_len;
 	sem->nr_in_fifos = 0;
 
-	TRACE_CUR("New IKGLP Sem: m = %u, k = %u, max fifo_len = %u\n",
+	TRACE_CUR("New R2DGLP Sem: m = %u, k = %u, max fifo_len = %u\n",
 		  sem->max_in_fifos,
 		  sem->nr_replicas,
 		  sem->max_fifo_len);
@@ -1936,12 +1936,12 @@ struct litmus_lock* ikglp_new(unsigned int m,
 	sem->top_m_size = 0;
 
 	// init heaps
-	INIT_BINHEAP_HANDLE(&sem->top_m, ikglp_min_heap_base_priority_order);
-	INIT_BINHEAP_HANDLE(&sem->not_top_m, ikglp_max_heap_base_priority_order);
-	INIT_BINHEAP_HANDLE(&sem->donees, ikglp_min_heap_donee_order);
+	INIT_BINHEAP_HANDLE(&sem->top_m, r2dglp_min_heap_base_priority_order);
+	INIT_BINHEAP_HANDLE(&sem->not_top_m, r2dglp_max_heap_base_priority_order);
+	INIT_BINHEAP_HANDLE(&sem->donees, r2dglp_min_heap_donee_order);
 	INIT_BINHEAP_HANDLE(&sem->priority_queue,
-					ikglp_max_heap_base_priority_order);
-	INIT_BINHEAP_HANDLE(&sem->donors, ikglp_donor_max_heap_base_priority_order);
+					r2dglp_max_heap_base_priority_order);
+	INIT_BINHEAP_HANDLE(&sem->donors, r2dglp_donor_max_heap_base_priority_order);
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	sem->aff_obs = NULL;
@@ -1960,31 +1960,31 @@ struct litmus_lock* ikglp_new(unsigned int m,
 /****************************************************************************/
 
 
-static inline int __replica_to_gpu(struct ikglp_affinity* aff, int replica)
+static inline int __replica_to_gpu(struct r2dglp_affinity* aff, int replica)
 {
 	int gpu = replica % aff->nr_rsrc;
 	return gpu;
 }
 
-static inline int replica_to_gpu(struct ikglp_affinity* aff, int replica)
+static inline int replica_to_gpu(struct r2dglp_affinity* aff, int replica)
 {
 	int gpu = __replica_to_gpu(aff, replica) + aff->offset;
 	return gpu;
 }
 
-static inline int gpu_to_base_replica(struct ikglp_affinity* aff, int gpu)
+static inline int gpu_to_base_replica(struct r2dglp_affinity* aff, int gpu)
 {
 	int replica = gpu - aff->offset;
 	return replica;
 }
 
-static inline int same_gpu(struct ikglp_affinity* aff,
+static inline int same_gpu(struct r2dglp_affinity* aff,
 				int replica_a, int replica_b)
 {
 	return(replica_to_gpu(aff, replica_a) == replica_to_gpu(aff, replica_b));
 }
 
-static inline int has_affinity(struct ikglp_affinity* aff,
+static inline int has_affinity(struct r2dglp_affinity* aff,
 				struct task_struct* t, int replica)
 {
 	if(tsk_rt(t)->last_gpu >= 0)
@@ -1992,38 +1992,38 @@ static inline int has_affinity(struct ikglp_affinity* aff,
 	return 0;
 }
 
-int ikglp_aff_obs_close(struct affinity_observer* obs)
+int r2dglp_aff_obs_close(struct affinity_observer* obs)
 {
 	return 0;
 }
 
-void ikglp_aff_obs_free(struct affinity_observer* obs)
+void r2dglp_aff_obs_free(struct affinity_observer* obs)
 {
-	struct ikglp_affinity *ikglp_aff = ikglp_aff_obs_from_aff_obs(obs);
+	struct r2dglp_affinity *r2dglp_aff = r2dglp_aff_obs_from_aff_obs(obs);
 
 	/* make sure the thread destroying this semaphore will not
 	   call the exit callback on a destroyed lock. */
 	struct task_struct *t = current;
-	if (is_realtime(t) && tsk_rt(t)->rsrc_exit_cb_args == ikglp_aff)
+	if (is_realtime(t) && tsk_rt(t)->rsrc_exit_cb_args == r2dglp_aff)
 	{
 		tsk_rt(t)->rsrc_exit_cb = NULL;
 		tsk_rt(t)->rsrc_exit_cb_args = NULL;
 	}
 
-	kfree(ikglp_aff->nr_cur_users_on_rsrc);
-	kfree(ikglp_aff->nr_aff_on_rsrc);
-	kfree(ikglp_aff->q_info);
-	kfree(ikglp_aff);
+	kfree(r2dglp_aff->nr_cur_users_on_rsrc);
+	kfree(r2dglp_aff->nr_aff_on_rsrc);
+	kfree(r2dglp_aff->q_info);
+	kfree(r2dglp_aff);
 }
 
-static struct affinity_observer* ikglp_aff_obs_new(
+static struct affinity_observer* r2dglp_aff_obs_new(
                 struct affinity_observer_ops* ops,
-				struct ikglp_affinity_ops* ikglp_ops,
+				struct r2dglp_affinity_ops* r2dglp_ops,
 				void* __user args)
 {
-	struct ikglp_affinity* ikglp_aff;
+	struct r2dglp_affinity* r2dglp_aff;
 	struct gpu_affinity_observer_args aff_args;
-	struct ikglp_semaphore* sem;
+	struct r2dglp_semaphore* sem;
 	unsigned int i;
 	unsigned long flags;
 
@@ -2034,9 +2034,9 @@ static struct affinity_observer* ikglp_aff_obs_new(
 		return(NULL);
 	}
 
-	sem = (struct ikglp_semaphore*) get_lock_from_od(aff_args.obs.lock_od);
+	sem = (struct r2dglp_semaphore*) get_lock_from_od(aff_args.obs.lock_od);
 
-	if(sem->litmus_lock.type != IKGLP_SEM) {
+	if(sem->litmus_lock.type != R2DGLP_SEM) {
 		TRACE_CUR("Lock type not supported.  Type = %d\n",
 						sem->litmus_lock.type);
 		return(NULL);
@@ -2053,80 +2053,80 @@ static struct affinity_observer* ikglp_aff_obs_new(
 		return(NULL);
 	}
 
-	ikglp_aff = kmalloc(sizeof(*ikglp_aff), GFP_KERNEL);
-	if(!ikglp_aff)
+	r2dglp_aff = kmalloc(sizeof(*r2dglp_aff), GFP_KERNEL);
+	if(!r2dglp_aff)
 		return(NULL);
 
-	ikglp_aff->q_info = kmalloc(
-					sizeof(struct ikglp_queue_info)*sem->nr_replicas,
+	r2dglp_aff->q_info = kmalloc(
+					sizeof(struct r2dglp_queue_info)*sem->nr_replicas,
 					GFP_KERNEL);
-	if(!ikglp_aff->q_info) {
-		kfree(ikglp_aff);
+	if(!r2dglp_aff->q_info) {
+		kfree(r2dglp_aff);
 		return(NULL);
 	}
 
-	ikglp_aff->nr_cur_users_on_rsrc = kmalloc(
+	r2dglp_aff->nr_cur_users_on_rsrc = kmalloc(
 					sizeof(unsigned int)*(sem->nr_replicas / aff_args.rho),
 					GFP_KERNEL);
-	if(!ikglp_aff->nr_cur_users_on_rsrc) {
-		kfree(ikglp_aff->q_info);
-		kfree(ikglp_aff);
+	if(!r2dglp_aff->nr_cur_users_on_rsrc) {
+		kfree(r2dglp_aff->q_info);
+		kfree(r2dglp_aff);
 		return(NULL);
 	}
 
-	ikglp_aff->nr_aff_on_rsrc = kmalloc(
+	r2dglp_aff->nr_aff_on_rsrc = kmalloc(
 					sizeof(unsigned int)*(sem->nr_replicas / aff_args.rho),
 					GFP_KERNEL);
-	if(!ikglp_aff->nr_aff_on_rsrc) {
-		kfree(ikglp_aff->nr_cur_users_on_rsrc);
-		kfree(ikglp_aff->q_info);
-		kfree(ikglp_aff);
+	if(!r2dglp_aff->nr_aff_on_rsrc) {
+		kfree(r2dglp_aff->nr_cur_users_on_rsrc);
+		kfree(r2dglp_aff->q_info);
+		kfree(r2dglp_aff);
 		return(NULL);
 	}
 
-	affinity_observer_new(&ikglp_aff->obs, ops, &aff_args.obs);
+	affinity_observer_new(&r2dglp_aff->obs, ops, &aff_args.obs);
 
-	ikglp_aff->ops = ikglp_ops;
-	ikglp_aff->offset = aff_args.replica_to_gpu_offset;
-	ikglp_aff->nr_simult = aff_args.rho;
-	ikglp_aff->nr_rsrc = sem->nr_replicas / ikglp_aff->nr_simult;
-	ikglp_aff->relax_max_fifo_len = (aff_args.relaxed_rules) ? 1 : 0;
+	r2dglp_aff->ops = r2dglp_ops;
+	r2dglp_aff->offset = aff_args.replica_to_gpu_offset;
+	r2dglp_aff->nr_simult = aff_args.rho;
+	r2dglp_aff->nr_rsrc = sem->nr_replicas / r2dglp_aff->nr_simult;
+	r2dglp_aff->relax_max_fifo_len = (aff_args.relaxed_rules) ? 1 : 0;
 
 	TRACE_CUR("GPU affinity_observer: offset = %d, nr_simult = %d, "
 			  "nr_rsrc = %d, relaxed_fifo_len = %d\n",
-			  ikglp_aff->offset, ikglp_aff->nr_simult, ikglp_aff->nr_rsrc,
-			  ikglp_aff->relax_max_fifo_len);
+			  r2dglp_aff->offset, r2dglp_aff->nr_simult, r2dglp_aff->nr_rsrc,
+			  r2dglp_aff->relax_max_fifo_len);
 
-	memset(ikglp_aff->nr_cur_users_on_rsrc, 0,
-					sizeof(int)*(ikglp_aff->nr_rsrc));
-	memset(ikglp_aff->nr_aff_on_rsrc, 0,
-					sizeof(unsigned int)*(ikglp_aff->nr_rsrc));
+	memset(r2dglp_aff->nr_cur_users_on_rsrc, 0,
+					sizeof(int)*(r2dglp_aff->nr_rsrc));
+	memset(r2dglp_aff->nr_aff_on_rsrc, 0,
+					sizeof(unsigned int)*(r2dglp_aff->nr_rsrc));
 
 	for(i = 0; i < sem->nr_replicas; ++i) {
-		ikglp_aff->q_info[i].q = &sem->fifo_queues[i];
-		ikglp_aff->q_info[i].estimated_len = 0;
+		r2dglp_aff->q_info[i].q = &sem->fifo_queues[i];
+		r2dglp_aff->q_info[i].estimated_len = 0;
 
 		/* multiple q_info's will point to the same resource (aka GPU) if
 		   aff_args.nr_simult_users > 1 */
-		ikglp_aff->q_info[i].nr_cur_users =
-				&ikglp_aff->nr_cur_users_on_rsrc[__replica_to_gpu(ikglp_aff,i)];
-		ikglp_aff->q_info[i].nr_aff_users =
-				&ikglp_aff->nr_aff_on_rsrc[__replica_to_gpu(ikglp_aff,i)];
+		r2dglp_aff->q_info[i].nr_cur_users =
+				&r2dglp_aff->nr_cur_users_on_rsrc[__replica_to_gpu(r2dglp_aff,i)];
+		r2dglp_aff->q_info[i].nr_aff_users =
+				&r2dglp_aff->nr_aff_on_rsrc[__replica_to_gpu(r2dglp_aff,i)];
 	}
 
 	/* attach observer to the lock */
 	raw_spin_lock_irqsave(&sem->real_lock, flags);
-	sem->aff_obs = ikglp_aff;
+	sem->aff_obs = r2dglp_aff;
 	raw_spin_unlock_irqrestore(&sem->real_lock, flags);
 
-	return &ikglp_aff->obs;
+	return &r2dglp_aff->obs;
 }
 
-static int gpu_replica_to_resource(struct ikglp_affinity* aff,
+static int gpu_replica_to_resource(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	return(replica_to_gpu(aff, ikglp_get_idx(sem, fq)));
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	return(replica_to_gpu(aff, r2dglp_get_idx(sem, fq)));
 }
 
 
@@ -2147,10 +2147,10 @@ static int gpu_replica_to_resource(struct ikglp_affinity* aff,
 /*   - Task period                                                          */
 /*--------------------------------------------------------------------------*/
 
-struct fifo_queue* gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
+struct fifo_queue* gpu_r2dglp_advise_enqueue(struct r2dglp_affinity* aff,
 				struct task_struct* t)
 {
-	// advise_enqueue must be smart as not not break IKGLP rules:
+	// advise_enqueue must be smart as not not break R2DGLP rules:
 	//  * No queue can be greater than ceil(m/k) in length, unless
 	//    'relax_max_fifo_len' is asserted
 	//  * Cannot let a queue idle if there exist waiting PQ/donors
@@ -2161,10 +2161,10 @@ struct fifo_queue* gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
 	//
 	// Huristic strategy: Find the shortest queue that is not full.
 
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
 	lt_t min_len;
 	unsigned int min_nr_users, min_nr_aff_users;
-	struct ikglp_queue_info *shortest, *aff_queue;
+	struct r2dglp_queue_info *shortest, *aff_queue;
 	struct fifo_queue *to_enqueue;
 	unsigned int i;
 	int affinity_gpu;
@@ -2205,7 +2205,7 @@ struct fifo_queue* gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
 
 	TRACE_CUR("cs is %llu on queue %d (count = %u): est len = %llu\n",
 			  get_gpu_estimate(t, MIG_LOCAL),
-			  ikglp_get_idx(sem, shortest->q),
+			  r2dglp_get_idx(sem, shortest->q),
 			  shortest->q->count,
 			  min_len);
 
@@ -2241,7 +2241,7 @@ struct fifo_queue* gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
 				}
 				else if(unlikely(est_len == min_len)) {
 					/* equal lengths */
-					if(!has_affinity(aff, t, ikglp_get_idx(sem, shortest->q))) {
+					if(!has_affinity(aff, t, r2dglp_get_idx(sem, shortest->q))) {
 						/* don't sacrifice affinity on tie */
 						if(has_affinity(aff, t, i)) {
 							/* switch to maintain affinity */
@@ -2271,40 +2271,40 @@ struct fifo_queue* gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
 						  get_gpu_estimate(t,
 								gpu_migration_distance(tsk_rt(t)->last_gpu,
 										replica_to_gpu(aff, i))),
-						  ikglp_get_idx(sem, aff->q_info[i].q),
+						  r2dglp_get_idx(sem, aff->q_info[i].q),
 						  aff->q_info[i].q->count,
 						  est_len);
 			}
 			else {
 				TRACE_CUR("queue %d is too long.  ineligible for enqueue.\n",
-						  ikglp_get_idx(sem, aff->q_info[i].q));
+						  r2dglp_get_idx(sem, aff->q_info[i].q));
 			}
 		}
 	}
 
 	if(nominal_fq_len(shortest->q) >= max_fifo_len) {
 		TRACE_CUR("selected fq %d is too long, but returning it anyway.\n",
-				  ikglp_get_idx(sem, shortest->q));
+				  r2dglp_get_idx(sem, shortest->q));
 	}
 
 	to_enqueue = shortest->q;
 	TRACE_CUR("enqueue on fq %d (count = %u) (non-aff wanted fq %d)\n",
-			  ikglp_get_idx(sem, to_enqueue),
+			  r2dglp_get_idx(sem, to_enqueue),
 			  to_enqueue->count,
-			  ikglp_get_idx(sem, sem->shortest_fifo_queue));
+			  r2dglp_get_idx(sem, sem->shortest_fifo_queue));
 
 	return to_enqueue;
 }
 
 
-static ikglp_wait_state_t* pick_steal(struct ikglp_affinity* aff,
+static r2dglp_wait_state_t* pick_steal(struct r2dglp_affinity* aff,
 				int dest_gpu,
 				struct fifo_queue* fq)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	ikglp_wait_state_t *wait = NULL;
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	r2dglp_wait_state_t *wait = NULL;
 	int max_improvement = -(MIG_NONE+1);
-	int replica = ikglp_get_idx(sem, fq);
+	int replica = r2dglp_get_idx(sem, fq);
 
 	if(waitqueue_active(&fq->wait)) {
 		int this_gpu = replica_to_gpu(aff, replica);
@@ -2312,8 +2312,8 @@ static ikglp_wait_state_t* pick_steal(struct ikglp_affinity* aff,
 
 		list_for_each(pos, &fq->wait.task_list) {
 			wait_queue_t *fq_wait = list_entry(pos, wait_queue_t, task_list);
-			ikglp_wait_state_t *tmp_wait =
-					container_of(fq_wait, ikglp_wait_state_t, fq_node);
+			r2dglp_wait_state_t *tmp_wait =
+					container_of(fq_wait, r2dglp_wait_state_t, fq_node);
 
 			int tmp_improvement =
 				gpu_migration_distance(this_gpu,
@@ -2349,22 +2349,22 @@ out:
 }
 
 
-ikglp_wait_state_t* gpu_ikglp_advise_steal(struct ikglp_affinity* aff,
+r2dglp_wait_state_t* gpu_r2dglp_advise_steal(struct r2dglp_affinity* aff,
 				struct fifo_queue* dst)
 {
 	/* Huristic strategy: Find task with greatest improvement in affinity. */
 
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	ikglp_wait_state_t *to_steal_state = NULL;
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	r2dglp_wait_state_t *to_steal_state = NULL;
 	int max_improvement = -(MIG_NONE+1);
 	int replica, i;
 	int dest_gpu;
 
-	replica = ikglp_get_idx(sem, dst);
+	replica = r2dglp_get_idx(sem, dst);
 	dest_gpu = replica_to_gpu(aff, replica);
 
 	for(i = 0; i < sem->nr_replicas; ++i) {
-		ikglp_wait_state_t *tmp_to_steal_state =
+		r2dglp_wait_state_t *tmp_to_steal_state =
 			pick_steal(aff, dest_gpu, &sem->fifo_queues[i]);
 
 		if(tmp_to_steal_state) {
@@ -2393,10 +2393,10 @@ out:
 		TRACE_CUR("Selected victim %s/%d on fq %d (GPU %d) for fq %d "
 				  "(GPU %d): improvement = %d\n",
 				  to_steal_state->task->comm, to_steal_state->task->pid,
-				  ikglp_get_idx(sem, to_steal_state->donee_heap_node.fq),
+				  r2dglp_get_idx(sem, to_steal_state->donee_heap_node.fq),
 				  replica_to_gpu(aff,
-				      ikglp_get_idx(sem, to_steal_state->donee_heap_node.fq)),
-				  ikglp_get_idx(sem, dst),
+				      r2dglp_get_idx(sem, to_steal_state->donee_heap_node.fq)),
+				  r2dglp_get_idx(sem, dst),
 				  dest_gpu,
 				  max_improvement);
 	}
@@ -2407,19 +2407,19 @@ out:
 
 static inline int has_donor(wait_queue_t* fq_wait)
 {
-	ikglp_wait_state_t *wait =
-			container_of(fq_wait, ikglp_wait_state_t, fq_node);
+	r2dglp_wait_state_t *wait =
+			container_of(fq_wait, r2dglp_wait_state_t, fq_node);
 	return(wait->donee_heap_node.donor_info != NULL);
 }
 
-static ikglp_donee_heap_node_t* pick_donee(struct ikglp_affinity* aff,
+static r2dglp_donee_heap_node_t* pick_donee(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq,
 				int* dist_from_head)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
 	struct task_struct *donee;
-	ikglp_donee_heap_node_t *donee_node;
-	struct task_struct *mth_highest = ikglp_mth_highest(sem);
+	r2dglp_donee_heap_node_t *donee_node;
+	struct task_struct *mth_highest = r2dglp_mth_highest(sem);
 
 	if(fq->owner &&
 	   fq->donee_heap_node.donor_info == NULL &&
@@ -2432,14 +2432,14 @@ static ikglp_donee_heap_node_t* pick_donee(struct ikglp_affinity* aff,
 		BUG_ON(donee != donee_node->task);
 
 		TRACE_CUR("picked owner of fq %d as donee\n",
-				  ikglp_get_idx(sem, fq));
+				  r2dglp_get_idx(sem, fq));
 
 		goto out;
 	}
 	else if(waitqueue_active(&fq->wait)) {
 		struct list_head	*pos;
 
-		TRACE_CUR("searching fq %d for donee\n", ikglp_get_idx(sem, fq));
+		TRACE_CUR("searching fq %d for donee\n", r2dglp_get_idx(sem, fq));
 
 		*dist_from_head = 1;
 
@@ -2447,8 +2447,8 @@ static ikglp_donee_heap_node_t* pick_donee(struct ikglp_affinity* aff,
 		   the donee will be closer to obtaining a resource. */
 		list_for_each(pos, &fq->wait.task_list) {
 			wait_queue_t *fq_wait = list_entry(pos, wait_queue_t, task_list);
-			ikglp_wait_state_t *wait =
-					container_of(fq_wait, ikglp_wait_state_t, fq_node);
+			r2dglp_wait_state_t *wait =
+					container_of(fq_wait, r2dglp_wait_state_t, fq_node);
 
 			if(!has_donor(fq_wait) &&
 			   mth_highest != wait->task &&
@@ -2459,7 +2459,7 @@ static ikglp_donee_heap_node_t* pick_donee(struct ikglp_affinity* aff,
 				BUG_ON(donee != donee_node->task);
 
 				TRACE_CUR("picked waiter in fq %d as donee\n",
-						  ikglp_get_idx(sem, fq));
+						  r2dglp_get_idx(sem, fq));
 
 				goto out;
 			}
@@ -2469,14 +2469,14 @@ static ikglp_donee_heap_node_t* pick_donee(struct ikglp_affinity* aff,
 
 	donee = NULL;
 	donee_node = NULL;
-	*dist_from_head = IKGLP_INVAL_DISTANCE;
+	*dist_from_head = R2DGLP_INVAL_DISTANCE;
 
-	TRACE_CUR("Found no one to be donee in fq %d!\n", ikglp_get_idx(sem, fq));
+	TRACE_CUR("Found no one to be donee in fq %d!\n", r2dglp_get_idx(sem, fq));
 
 out:
 
 	TRACE_CUR("Candidate donee for fq %d is %s/%d (dist_from_head = %d)\n",
-			  ikglp_get_idx(sem, fq),
+			  r2dglp_get_idx(sem, fq),
 			  (donee) ? (donee)->comm : "null",
 			  (donee) ? (donee)->pid  : 0,
 			  *dist_from_head);
@@ -2484,8 +2484,8 @@ out:
 	return donee_node;
 }
 
-ikglp_donee_heap_node_t* gpu_ikglp_advise_donee_selection(
-				struct ikglp_affinity* aff,
+r2dglp_donee_heap_node_t* gpu_r2dglp_advise_donee_selection(
+				struct r2dglp_affinity* aff,
 				struct task_struct* donor)
 {
 	// Huristic strategy: Find the highest-priority donee that is waiting on
@@ -2496,19 +2496,19 @@ ikglp_donee_heap_node_t* gpu_ikglp_advise_donee_selection(
 	// Further strategy: amongst elible donees waiting for the same GPU, pick
 	// the one closest to the head of the FIFO queue (including owners).
 
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	ikglp_donee_heap_node_t *donee_node;
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	r2dglp_donee_heap_node_t *donee_node;
 	gpu_migration_dist_t distance;
 	int start, i, j;
 
-	ikglp_donee_heap_node_t *default_donee;
-	ikglp_wait_state_t *default_donee_donor_info;
+	r2dglp_donee_heap_node_t *default_donee;
+	r2dglp_wait_state_t *default_donee_donor_info;
 
 	if(tsk_rt(donor)->last_gpu < 0) {
-		/* no affinity.  just return the min prio, like standard IKGLP */
+		/* no affinity.  just return the min prio, like standard R2DGLP */
 		/* TODO: Find something closer to the head of the queue?? */
 		donee_node = binheap_top_entry(&sem->donees,
-									   ikglp_donee_heap_node_t,
+									   r2dglp_donee_heap_node_t,
 									   node);
 		goto out;
 	}
@@ -2520,9 +2520,9 @@ ikglp_donee_heap_node_t* gpu_ikglp_advise_donee_selection(
 	// NOTE: The original donor relation *must* be restored, even if we select
 	// the default donee throug affinity-aware selection, before returning
 	// from this function so we don't screw up our heap ordering.
-	// The standard IKGLP algorithm will steal the donor relationship if needed.
+	// The standard R2DGLP algorithm will steal the donor relationship if needed.
 	default_donee =
-			binheap_top_entry(&sem->donees, ikglp_donee_heap_node_t, node);
+			binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
 
 	default_donee_donor_info = default_donee->donor_info;  // back-up donor relation
 	default_donee->donor_info = NULL;  // temporarily break any donor relation.
@@ -2542,7 +2542,7 @@ ikglp_donee_heap_node_t* gpu_ikglp_advise_donee_selection(
 
 		// only interested in queues that will improve our distance
 		if(temp_distance < distance || donee_node == NULL) {
-			int dist_from_head = IKGLP_INVAL_DISTANCE;
+			int dist_from_head = R2DGLP_INVAL_DISTANCE;
 
 			TRACE_CUR("searching for donor on GPU %d\n", i);
 
@@ -2551,7 +2551,7 @@ ikglp_donee_heap_node_t* gpu_ikglp_advise_donee_selection(
 
 			for(j = 0; j < aff->nr_simult; ++j) {
 				int temp_dist_from_head;
-				ikglp_donee_heap_node_t *temp_donee_node;
+				r2dglp_donee_heap_node_t *temp_donee_node;
 				struct fifo_queue *fq;
 
 				fq = &(sem->fifo_queues[i + j*aff->nr_rsrc]);
@@ -2566,7 +2566,7 @@ ikglp_donee_heap_node_t* gpu_ikglp_advise_donee_selection(
 				}
 			}
 
-			if(dist_from_head != IKGLP_INVAL_DISTANCE) {
+			if(dist_from_head != R2DGLP_INVAL_DISTANCE) {
 				TRACE_CUR("found donee %s/%d and is the %d-th waiter.\n",
 						  donee_node->task->comm, donee_node->task->pid,
 						  dist_from_head);
@@ -2600,8 +2600,8 @@ out:
 	TRACE_CUR("Selected donee %s/%d on fq %d "
 			  "(GPU %d) for %s/%d with affinity for GPU %d\n",
 			  donee_node->task->comm, donee_node->task->pid,
-			  ikglp_get_idx(sem, donee_node->fq),
-			  replica_to_gpu(aff, ikglp_get_idx(sem, donee_node->fq)),
+			  r2dglp_get_idx(sem, donee_node->fq),
+			  replica_to_gpu(aff, r2dglp_get_idx(sem, donee_node->fq)),
 			  donor->comm, donor->pid, tsk_rt(donor)->last_gpu);
 
 	return(donee_node);
@@ -2611,11 +2611,11 @@ out:
 
 static void __find_closest_donor(int target_gpu,
 				struct binheap_node* donor_node,
-				ikglp_wait_state_t** cur_closest,
+				r2dglp_wait_state_t** cur_closest,
 				int* cur_dist)
 {
-	ikglp_wait_state_t *this_donor =
-		binheap_entry(donor_node, ikglp_wait_state_t, node);
+	r2dglp_wait_state_t *this_donor =
+		binheap_entry(donor_node, r2dglp_wait_state_t, node);
 
 	int this_dist =
 		gpu_migration_distance(target_gpu, tsk_rt(this_donor->task)->last_gpu);
@@ -2645,7 +2645,7 @@ static void __find_closest_donor(int target_gpu,
 						cur_closest, cur_dist);
 }
 
-ikglp_wait_state_t* gpu_ikglp_advise_donor_to_fq(struct ikglp_affinity* aff,
+r2dglp_wait_state_t* gpu_r2dglp_advise_donor_to_fq(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq)
 {
 	// Huristic strategy: Find donor with the closest affinity to fq.
@@ -2657,14 +2657,14 @@ ikglp_wait_state_t* gpu_ikglp_advise_donor_to_fq(struct ikglp_affinity* aff,
 	// donors, at most.  We won't recurse too deeply to have to worry about
 	// our stack.  (even with 128 CPUs, our nest depth is at most 7 deep).
 
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	ikglp_wait_state_t *donor = NULL;
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	r2dglp_wait_state_t *donor = NULL;
 	int distance = MIG_NONE;
-	int gpu = replica_to_gpu(aff, ikglp_get_idx(sem, fq));
+	int gpu = replica_to_gpu(aff, r2dglp_get_idx(sem, fq));
 
 #ifdef CONFIG_SCHED_DEBUG_TRACE
-	ikglp_wait_state_t* default_donor =
-			binheap_top_entry(&sem->donors, ikglp_wait_state_t, node);
+	r2dglp_wait_state_t* default_donor =
+			binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
 #endif
 
 	__find_closest_donor(gpu, sem->donors.root, &donor, &distance);
@@ -2673,7 +2673,7 @@ ikglp_wait_state_t* gpu_ikglp_advise_donor_to_fq(struct ikglp_affinity* aff,
 			  "(non-aff wanted %s/%d). differs = %d\n",
 			  donor->task->comm, donor->task->pid,
 			  distance,
-			  ikglp_get_idx(sem, fq),
+			  r2dglp_get_idx(sem, fq),
 			  default_donor->task->comm, default_donor->task->pid,
 			  (donor->task != default_donor->task)
 			  );
@@ -2683,13 +2683,13 @@ ikglp_wait_state_t* gpu_ikglp_advise_donor_to_fq(struct ikglp_affinity* aff,
 
 
 
-void gpu_ikglp_notify_enqueue(struct ikglp_affinity* aff,
+void gpu_r2dglp_notify_enqueue(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	int replica = ikglp_get_idx(sem, fq);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	int replica = r2dglp_get_idx(sem, fq);
 	int gpu = replica_to_gpu(aff, replica);
-	struct ikglp_queue_info *info = &aff->q_info[replica];
+	struct r2dglp_queue_info *info = &aff->q_info[replica];
 	lt_t est_time;
 	lt_t est_len_before;
 
@@ -2702,18 +2702,18 @@ void gpu_ikglp_notify_enqueue(struct ikglp_affinity* aff,
 	info->estimated_len += est_time;
 
 	TRACE_CUR("fq %d: q_len (%llu) + est_cs (%llu) = %llu\n",
-			  ikglp_get_idx(sem, info->q),
+			  r2dglp_get_idx(sem, info->q),
 			  est_len_before, est_time,
 			  info->estimated_len);
 }
 
-void gpu_ikglp_notify_dequeue(struct ikglp_affinity* aff, struct fifo_queue* fq,
+void gpu_r2dglp_notify_dequeue(struct r2dglp_affinity* aff, struct fifo_queue* fq,
 				struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	int replica = ikglp_get_idx(sem, fq);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	int replica = r2dglp_get_idx(sem, fq);
 	int gpu = replica_to_gpu(aff, replica);
-	struct ikglp_queue_info *info = &aff->q_info[replica];
+	struct r2dglp_queue_info *info = &aff->q_info[replica];
 	lt_t est_time = get_gpu_estimate(t,
 					gpu_migration_distance(tsk_rt(t)->last_gpu, gpu));
 
@@ -2726,13 +2726,13 @@ void gpu_ikglp_notify_dequeue(struct ikglp_affinity* aff, struct fifo_queue* fq,
 	}
 
 	TRACE_CUR("fq %d est len is now %llu\n",
-			  ikglp_get_idx(sem, info->q),
+			  r2dglp_get_idx(sem, info->q),
 			  info->estimated_len);
 }
 
-int gpu_ikglp_notify_exit(struct ikglp_affinity* aff, struct task_struct* t)
+int gpu_r2dglp_notify_exit(struct r2dglp_affinity* aff, struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
 	unsigned long flags = 0, more_flags;
 	int aff_rsrc;
 #ifdef CONFIG_LITMUS_DGL_SUPPORT
@@ -2762,22 +2762,22 @@ int gpu_ikglp_notify_exit(struct ikglp_affinity* aff, struct task_struct* t)
 	return 0;
 }
 
-int gpu_ikglp_notify_exit_trampoline(struct task_struct* t)
+int gpu_r2dglp_notify_exit_trampoline(struct task_struct* t)
 {
-	struct ikglp_affinity* aff =
-			(struct ikglp_affinity*)tsk_rt(t)->rsrc_exit_cb_args;
+	struct r2dglp_affinity* aff =
+			(struct r2dglp_affinity*)tsk_rt(t)->rsrc_exit_cb_args;
 	if(likely(aff))
-		return gpu_ikglp_notify_exit(aff, t);
+		return gpu_r2dglp_notify_exit(aff, t);
 	else
 		return -1;
 }
 
-void gpu_ikglp_notify_acquired(struct ikglp_affinity* aff,
+void gpu_r2dglp_notify_acquired(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq,
 				struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	int replica = ikglp_get_idx(sem, fq);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	int replica = r2dglp_get_idx(sem, fq);
 	int gpu = replica_to_gpu(aff, replica);
 	int last_gpu = tsk_rt(t)->last_gpu;
 
@@ -2799,7 +2799,7 @@ void gpu_ikglp_notify_acquired(struct ikglp_affinity* aff,
 		/* increment affinity count on new GPU */
 		++(aff->nr_aff_on_rsrc[gpu - aff->offset]);
 		tsk_rt(t)->rsrc_exit_cb_args = aff;
-		tsk_rt(t)->rsrc_exit_cb = gpu_ikglp_notify_exit_trampoline;
+		tsk_rt(t)->rsrc_exit_cb = gpu_r2dglp_notify_exit_trampoline;
 	}
 
 	reg_nv_device(gpu, 1, t);  /* register */
@@ -2809,12 +2809,12 @@ void gpu_ikglp_notify_acquired(struct ikglp_affinity* aff,
 	start_gpu_tracker(t);
 }
 
-void gpu_ikglp_notify_freed(struct ikglp_affinity* aff,
+void gpu_r2dglp_notify_freed(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq,
 				struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	int replica = ikglp_get_idx(sem, fq);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	int replica = r2dglp_get_idx(sem, fq);
 	int gpu = replica_to_gpu(aff, replica);
 	lt_t est_time;
 
@@ -2844,28 +2844,28 @@ void gpu_ikglp_notify_freed(struct ikglp_affinity* aff,
 	tsk_rt(t)->last_gpu = gpu;
 }
 
-struct ikglp_affinity_ops gpu_ikglp_affinity =
+struct r2dglp_affinity_ops gpu_r2dglp_affinity =
 {
-	.advise_enqueue = gpu_ikglp_advise_enqueue,
-	.advise_steal = gpu_ikglp_advise_steal,
-	.advise_donee_selection = gpu_ikglp_advise_donee_selection,
-	.advise_donor_to_fq = gpu_ikglp_advise_donor_to_fq,
+	.advise_enqueue = gpu_r2dglp_advise_enqueue,
+	.advise_steal = gpu_r2dglp_advise_steal,
+	.advise_donee_selection = gpu_r2dglp_advise_donee_selection,
+	.advise_donor_to_fq = gpu_r2dglp_advise_donor_to_fq,
 
-	.notify_enqueue = gpu_ikglp_notify_enqueue,
-	.notify_dequeue = gpu_ikglp_notify_dequeue,
-	.notify_acquired = gpu_ikglp_notify_acquired,
-	.notify_freed = gpu_ikglp_notify_freed,
+	.notify_enqueue = gpu_r2dglp_notify_enqueue,
+	.notify_dequeue = gpu_r2dglp_notify_dequeue,
+	.notify_acquired = gpu_r2dglp_notify_acquired,
+	.notify_freed = gpu_r2dglp_notify_freed,
 
-	.notify_exit = gpu_ikglp_notify_exit,
+	.notify_exit = gpu_r2dglp_notify_exit,
 
 	.replica_to_resource = gpu_replica_to_resource,
 };
 
-struct affinity_observer* ikglp_gpu_aff_obs_new(
+struct affinity_observer* r2dglp_gpu_aff_obs_new(
 				struct affinity_observer_ops* ops,
 				void* __user args)
 {
-	return ikglp_aff_obs_new(ops, &gpu_ikglp_affinity, args);
+	return r2dglp_aff_obs_new(ops, &gpu_r2dglp_affinity, args);
 }
 
 
@@ -2875,13 +2875,13 @@ struct affinity_observer* ikglp_gpu_aff_obs_new(
 /*                 SIMPLE LOAD-BALANCING AFFINITY HEURISTIC                 */
 /*--------------------------------------------------------------------------*/
 
-struct fifo_queue* simple_gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
+struct fifo_queue* simple_gpu_r2dglp_advise_enqueue(struct r2dglp_affinity* aff,
 				struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
 	unsigned int min_count;
 	unsigned int min_nr_users;
-	struct ikglp_queue_info *shortest;
+	struct r2dglp_queue_info *shortest;
 	struct fifo_queue *to_enqueue;
 	unsigned int i;
 
@@ -2890,7 +2890,7 @@ struct fifo_queue* simple_gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
 	min_nr_users = *(shortest->nr_cur_users);
 
 	TRACE_CUR("queue %d: waiters = %u, total holders = %u\n",
-			  ikglp_get_idx(sem, shortest->q),
+			  r2dglp_get_idx(sem, shortest->q),
 			  shortest->q->count,
 			  min_nr_users);
 
@@ -2910,59 +2910,59 @@ struct fifo_queue* simple_gpu_ikglp_advise_enqueue(struct ikglp_affinity* aff,
 		}
 
 		TRACE_CUR("queue %d: waiters = %d, total holders = %d\n",
-				  ikglp_get_idx(sem, aff->q_info[i].q),
+				  r2dglp_get_idx(sem, aff->q_info[i].q),
 				  aff->q_info[i].q->count,
 				  *(aff->q_info[i].nr_cur_users));
 	}
 
 	to_enqueue = shortest->q;
 	TRACE_CUR("enqueue on fq %d (non-aff wanted fq %d)\n",
-			  ikglp_get_idx(sem, to_enqueue),
-			  ikglp_get_idx(sem, sem->shortest_fifo_queue));
+			  r2dglp_get_idx(sem, to_enqueue),
+			  r2dglp_get_idx(sem, sem->shortest_fifo_queue));
 
 	return to_enqueue;
 }
 
-ikglp_wait_state_t* simple_gpu_ikglp_advise_steal(struct ikglp_affinity* aff,
+r2dglp_wait_state_t* simple_gpu_r2dglp_advise_steal(struct r2dglp_affinity* aff,
 				struct fifo_queue* dst)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	return ikglp_find_hp_waiter_to_steal(sem, NULL);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	return r2dglp_find_hp_waiter_to_steal(sem, NULL);
 }
 
-ikglp_donee_heap_node_t* simple_gpu_ikglp_advise_donee_selection(
-				struct ikglp_affinity* aff, struct task_struct* donor)
+r2dglp_donee_heap_node_t* simple_gpu_r2dglp_advise_donee_selection(
+				struct r2dglp_affinity* aff, struct task_struct* donor)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	ikglp_donee_heap_node_t *donee =
-			binheap_top_entry(&sem->donees, ikglp_donee_heap_node_t, node);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	r2dglp_donee_heap_node_t *donee =
+			binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
 	return(donee);
 }
 
-ikglp_wait_state_t* simple_gpu_ikglp_advise_donor_to_fq(
-				struct ikglp_affinity* aff, struct fifo_queue* fq)
+r2dglp_wait_state_t* simple_gpu_r2dglp_advise_donor_to_fq(
+				struct r2dglp_affinity* aff, struct fifo_queue* fq)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	ikglp_wait_state_t* donor =
-			binheap_top_entry(&sem->donors, ikglp_wait_state_t, node);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	r2dglp_wait_state_t* donor =
+			binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
 	return(donor);
 }
 
-void simple_gpu_ikglp_notify_enqueue(struct ikglp_affinity* aff,
+void simple_gpu_r2dglp_notify_enqueue(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t)
 {
 }
 
-void simple_gpu_ikglp_notify_dequeue(struct ikglp_affinity* aff,
+void simple_gpu_r2dglp_notify_dequeue(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t)
 {
 }
 
-void simple_gpu_ikglp_notify_acquired(struct ikglp_affinity* aff,
+void simple_gpu_r2dglp_notify_acquired(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	int replica = ikglp_get_idx(sem, fq);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	int replica = r2dglp_get_idx(sem, fq);
 	int gpu = replica_to_gpu(aff, replica);
 
 	/* count the number or resource holders */
@@ -2971,11 +2971,11 @@ void simple_gpu_ikglp_notify_acquired(struct ikglp_affinity* aff,
 	reg_nv_device(gpu, 1, t);  /* register */
 }
 
-void simple_gpu_ikglp_notify_freed(struct ikglp_affinity* aff,
+void simple_gpu_r2dglp_notify_freed(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock(aff->obs.lock);
-	int replica = ikglp_get_idx(sem, fq);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
+	int replica = r2dglp_get_idx(sem, fq);
 	int gpu = replica_to_gpu(aff, replica);
 
 	/* count the number or resource holders */
@@ -2984,37 +2984,37 @@ void simple_gpu_ikglp_notify_freed(struct ikglp_affinity* aff,
 	reg_nv_device(gpu, 0, t);	/* unregister */
 }
 
-struct ikglp_affinity_ops simple_gpu_ikglp_affinity =
+struct r2dglp_affinity_ops simple_gpu_r2dglp_affinity =
 {
-	.advise_enqueue = simple_gpu_ikglp_advise_enqueue,
-	.advise_steal = simple_gpu_ikglp_advise_steal,
-	.advise_donee_selection = simple_gpu_ikglp_advise_donee_selection,
-	.advise_donor_to_fq = simple_gpu_ikglp_advise_donor_to_fq,
+	.advise_enqueue = simple_gpu_r2dglp_advise_enqueue,
+	.advise_steal = simple_gpu_r2dglp_advise_steal,
+	.advise_donee_selection = simple_gpu_r2dglp_advise_donee_selection,
+	.advise_donor_to_fq = simple_gpu_r2dglp_advise_donor_to_fq,
 
-	.notify_enqueue = simple_gpu_ikglp_notify_enqueue,
-	.notify_dequeue = simple_gpu_ikglp_notify_dequeue,
-	.notify_acquired = simple_gpu_ikglp_notify_acquired,
-	.notify_freed = simple_gpu_ikglp_notify_freed,
+	.notify_enqueue = simple_gpu_r2dglp_notify_enqueue,
+	.notify_dequeue = simple_gpu_r2dglp_notify_dequeue,
+	.notify_acquired = simple_gpu_r2dglp_notify_acquired,
+	.notify_freed = simple_gpu_r2dglp_notify_freed,
 
 	.notify_exit = NULL,
 
 	.replica_to_resource = gpu_replica_to_resource,
 };
 
-struct affinity_observer* ikglp_simple_gpu_aff_obs_new(
+struct affinity_observer* r2dglp_simple_gpu_aff_obs_new(
                 struct affinity_observer_ops* ops,
 				void* __user args)
 {
-	return ikglp_aff_obs_new(ops, &simple_gpu_ikglp_affinity, args);
+	return r2dglp_aff_obs_new(ops, &simple_gpu_r2dglp_affinity, args);
 }
 #endif /* end LITMUS_AFFINITY_LOCKING && LITMUS_NVIDIA */
 
 #if 0
 /* debugging routines */
 
-static void __ikglp_dump_pq(struct binheap_node *n, int depth)
+static void __r2dglp_dump_pq(struct binheap_node *n, int depth)
 {
-	ikglp_heap_node_t *request;
+	r2dglp_heap_node_t *request;
 	char padding[81] = "                                                                                ";
 
 	if(n == NULL) {
@@ -3022,7 +3022,7 @@ static void __ikglp_dump_pq(struct binheap_node *n, int depth)
 		return;
 	}
 
-	request = binheap_entry(n, ikglp_heap_node_t, node);
+	request = binheap_entry(n, r2dglp_heap_node_t, node);
 
 	if(depth*2 <= 80)
 		padding[depth*2] = '\0';
@@ -3033,13 +3033,13 @@ static void __ikglp_dump_pq(struct binheap_node *n, int depth)
 		  request->task->comm,
 		  request->task->pid);
 
-    if(n->left) __ikglp_dump_pq(n->left, depth+1);
-    if(n->right) __ikglp_dump_pq(n->right, depth+1);
+    if(n->left) __r2dglp_dump_pq(n->left, depth+1);
+    if(n->right) __r2dglp_dump_pq(n->right, depth+1);
 }
 
-static void __ikglp_dump_donors(struct binheap_node *n, int depth)
+static void __r2dglp_dump_donors(struct binheap_node *n, int depth)
 {
-	ikglp_wait_state_t *donor_node;
+	r2dglp_wait_state_t *donor_node;
 	char padding[81] = "                                                                                ";
 
 	if(n == NULL) {
@@ -3047,7 +3047,7 @@ static void __ikglp_dump_donors(struct binheap_node *n, int depth)
 		return;
 	}
 
-	donor_node = binheap_entry(n, ikglp_wait_state_t, node);
+	donor_node = binheap_entry(n, r2dglp_wait_state_t, node);
 
 	if(depth*2 <= 80)
 		padding[depth*2] = '\0';
@@ -3060,11 +3060,11 @@ static void __ikglp_dump_donors(struct binheap_node *n, int depth)
           donor_node->donee_info->task->comm,
           donor_node->donee_info->task->pid);
 
-    if(n->left) __ikglp_dump_donors(n->left, depth+1);
-    if(n->right) __ikglp_dump_donors(n->right, depth+1);
+    if(n->left) __r2dglp_dump_donors(n->left, depth+1);
+    if(n->right) __r2dglp_dump_donors(n->right, depth+1);
 }
 
-static void __ikglp_dump_fifoq(int i, struct fifo_queue* fq)
+static void __r2dglp_dump_fifoq(int i, struct fifo_queue* fq)
 {
 	TRACE("    FIFO %d: Owner = %s/%d (Virtually Unlocked = %u),  HP Waiter = %s/%d,  Length = %u\n",
 		  i,
@@ -3088,27 +3088,27 @@ static void __ikglp_dump_fifoq(int i, struct fifo_queue* fq)
 }
 
 __attribute__ ((unused))
-static void __ikglp_dump_state(struct ikglp_semaphore *sem)
+static void __r2dglp_dump_state(struct r2dglp_semaphore *sem)
 {
 	int i;
-	TRACE("IKGLP Lock %d\n", sem->litmus_lock.ident);
+	TRACE("R2DGLP Lock %d\n", sem->litmus_lock.ident);
 	TRACE("# Replicas: %u    Max FIFO Len: %u    Max in FIFOs: %u    Cur # in FIFOs: %u\n",
 		  sem->nr_replicas, sem->max_fifo_len, sem->max_in_fifos, sem->nr_in_fifos);
 	TRACE("# requests in top-m: %u\n", sem->top_m_size);
 
 	for (i = 0; i < sem->nr_replicas; ++i)
-		__ikglp_dump_fifoq(i, &sem->fifo_queues[i]);
+		__r2dglp_dump_fifoq(i, &sem->fifo_queues[i]);
 
 	TRACE("    PQ:\n");
-	__ikglp_dump_pq(sem->priority_queue.root, 1);
+	__r2dglp_dump_pq(sem->priority_queue.root, 1);
 
 	TRACE("    Donors:\n");
-	__ikglp_dump_donors(sem->donors.root, 1);
+	__r2dglp_dump_donors(sem->donors.root, 1);
 }
 
 static void print_global_list(struct binheap_node* n, int depth)
 {
-	ikglp_heap_node_t *global_heap_node;
+	r2dglp_heap_node_t *global_heap_node;
 	char padding[81] = "                                                                                ";
 
 	if(n == NULL) {
@@ -3116,7 +3116,7 @@ static void print_global_list(struct binheap_node* n, int depth)
 		return;
 	}
 
-	global_heap_node = binheap_entry(n, ikglp_heap_node_t, node);
+	global_heap_node = binheap_entry(n, r2dglp_heap_node_t, node);
 
 	if(depth*2 <= 80)
 		padding[depth*2] = '\0';
@@ -3130,9 +3130,9 @@ static void print_global_list(struct binheap_node* n, int depth)
     if(n->right) print_global_list(n->right, depth+1);
 }
 
-static void print_donees(struct ikglp_semaphore *sem, struct binheap_node *n, int depth)
+static void print_donees(struct r2dglp_semaphore *sem, struct binheap_node *n, int depth)
 {
-	ikglp_donee_heap_node_t *donee_node;
+	r2dglp_donee_heap_node_t *donee_node;
 	char padding[81] = "                                                                                ";
 	struct task_struct* donor = NULL;
 
@@ -3141,7 +3141,7 @@ static void print_donees(struct ikglp_semaphore *sem, struct binheap_node *n, in
 		return;
 	}
 
-	donee_node = binheap_entry(n, ikglp_donee_heap_node_t, node);
+	donee_node = binheap_entry(n, r2dglp_donee_heap_node_t, node);
 
 	if(depth*2 <= 80)
 		padding[depth*2] = '\0';
@@ -3156,7 +3156,7 @@ static void print_donees(struct ikglp_semaphore *sem, struct binheap_node *n, in
 			  donee_node->task->pid,
 			  (donor) ? donor->comm : "null",
 			  (donor) ? donor->pid : 0,
-			  ikglp_get_idx(sem, donee_node->fq));
+			  r2dglp_get_idx(sem, donee_node->fq));
 
     if(n->left) print_donees(sem, n->left, depth+1);
     if(n->right) print_donees(sem, n->right, depth+1);
@@ -3164,7 +3164,7 @@ static void print_donees(struct ikglp_semaphore *sem, struct binheap_node *n, in
 
 static void print_donors(struct binheap_node *n, int depth)
 {
-	ikglp_wait_state_t *donor_node;
+	r2dglp_wait_state_t *donor_node;
 	char padding[81] = "                                                                                ";
 
 	if(n == NULL) {
@@ -3172,7 +3172,7 @@ static void print_donors(struct binheap_node *n, int depth)
 		return;
 	}
 
-	donor_node = binheap_entry(n, ikglp_wait_state_t, node);
+	donor_node = binheap_entry(n, r2dglp_wait_state_t, node);
 
 	if(depth*2 <= 80)
 		padding[depth*2] = '\0';
@@ -3191,24 +3191,24 @@ static void print_donors(struct binheap_node *n, int depth)
 #endif
 
 #if 0
-struct ikglp_proc_print_heap_args
+struct r2dglp_proc_print_heap_args
 {
-	struct ikglp_semaphore *sem;
+	struct r2dglp_semaphore *sem;
 	int *size;
 	char **next;
 };
 
-static void __ikglp_pq_to_proc(struct binheap_node *n, void *args)
+static void __r2dglp_pq_to_proc(struct binheap_node *n, void *args)
 {
-	struct ikglp_proc_print_heap_args *hargs;
-	ikglp_heap_node_t *request;
+	struct r2dglp_proc_print_heap_args *hargs;
+	r2dglp_heap_node_t *request;
 	int w;
 
 	if (!n)
 		return;
 
-	hargs = (struct ikglp_proc_print_heap_args*) args;
-	request = binheap_entry(n, ikglp_heap_node_t, node);
+	hargs = (struct r2dglp_proc_print_heap_args*) args;
+	request = binheap_entry(n, r2dglp_heap_node_t, node);
 
 	w = scnprintf(*(hargs->next), *(hargs->size), "\t%s/%d\n",
 				  request->task->comm, request->task->pid);
@@ -3216,17 +3216,17 @@ static void __ikglp_pq_to_proc(struct binheap_node *n, void *args)
 	*(hargs->next) += w;
 }
 
-static void __ikglp_donor_to_proc(struct binheap_node *n, void *args)
+static void __r2dglp_donor_to_proc(struct binheap_node *n, void *args)
 {
-	struct ikglp_proc_print_heap_args *hargs;
-	ikglp_wait_state_t *donor_node;
+	struct r2dglp_proc_print_heap_args *hargs;
+	r2dglp_wait_state_t *donor_node;
 	int w;
 
 	if (!n)
 		return;
 
-	hargs = (struct ikglp_proc_print_heap_args*) args;
-	donor_node = binheap_entry(n, ikglp_wait_state_t, node);
+	hargs = (struct r2dglp_proc_print_heap_args*) args;
+	donor_node = binheap_entry(n, r2dglp_wait_state_t, node);
 
 	w = scnprintf(*(hargs->next), *(hargs->size), "\t%s/%d (donee: %s/%d)\n",
 				  donor_node->task->comm,
@@ -3238,9 +3238,9 @@ static void __ikglp_donor_to_proc(struct binheap_node *n, void *args)
 }
 
 
-static int ikglp_proc_print(char *page, char **start, off_t off, int count, int *eof, void *data)
+static int r2dglp_proc_print(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
-	struct ikglp_semaphore *sem = ikglp_from_lock((struct litmus_lock*)data);
+	struct r2dglp_semaphore *sem = r2dglp_from_lock((struct litmus_lock*)data);
 
 	int attempts = 0;
 	const int max_attempts = 10;
@@ -3250,7 +3250,7 @@ static int ikglp_proc_print(char *page, char **start, off_t off, int count, int 
 	int size = count;
 	char *next = page;
 
-	struct ikglp_proc_print_heap_args heap_args = {sem, &size, &next};
+	struct r2dglp_proc_print_heap_args heap_args = {sem, &size, &next};
 
 	int w;
 	int i;
@@ -3325,7 +3325,7 @@ static int ikglp_proc_print(char *page, char **start, off_t off, int count, int 
 	}
 	else {
 		w = scnprintf(next, size, "donors:\n"); size -= w; next += w;
-		binheap_for_each(&sem->priority_queue, __ikglp_pq_to_proc, &heap_args);
+		binheap_for_each(&sem->priority_queue, __r2dglp_pq_to_proc, &heap_args);
 	}
 
 	if (binheap_empty(&sem->donors)) {
@@ -3335,7 +3335,7 @@ static int ikglp_proc_print(char *page, char **start, off_t off, int count, int 
 	}
 	else {
 		w = scnprintf(next, size, "donors:\n"); size -= w; next += w;
-		binheap_for_each(&sem->donors, __ikglp_donor_to_proc, &heap_args);
+		binheap_for_each(&sem->donors, __r2dglp_donor_to_proc, &heap_args);
 	}
 
 	raw_spin_unlock_irqrestore(&sem->real_lock, flags);
@@ -3343,15 +3343,15 @@ static int ikglp_proc_print(char *page, char **start, off_t off, int count, int 
 	return count - size;
 }
 
-static void ikglp_proc_add(struct litmus_lock *l)
+static void r2dglp_proc_add(struct litmus_lock *l)
 {
 	if (!l->name)
 		l->name = kmalloc(LOCK_NAME_LEN*sizeof(char), GFP_KERNEL);
-	snprintf(l->name, LOCK_NAME_LEN, "ikglp-%d", l->ident);
-	litmus_add_proc_lock(l, ikglp_proc_print);
+	snprintf(l->name, LOCK_NAME_LEN, "r2dglp-%d", l->ident);
+	litmus_add_proc_lock(l, r2dglp_proc_print);
 }
 
-static void ikglp_proc_remove(struct litmus_lock *l)
+static void r2dglp_proc_remove(struct litmus_lock *l)
 {
 	if (l->name) {
 		litmus_remove_proc_lock(l);
@@ -3361,9 +3361,9 @@ static void ikglp_proc_remove(struct litmus_lock *l)
 	}
 }
 
-static struct litmus_lock_proc_ops ikglp_proc_ops =
+static struct litmus_lock_proc_ops r2dglp_proc_ops =
 {
-	.add = ikglp_proc_add,
-	.remove = ikglp_proc_remove
+	.add = r2dglp_proc_add,
+	.remove = r2dglp_proc_remove
 };
 #endif

@@ -1,5 +1,5 @@
-#ifndef LITMUS_IKGLP_H
-#define LITMUS_IKGLP_H
+#ifndef LITMUS_R2DGLP_H
+#define LITMUS_R2DGLP_H
 
 #include <litmus/litmus.h>
 #include <litmus/binheap.h>
@@ -7,51 +7,51 @@
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 #include <litmus/kexclu_affinity.h>
-struct ikglp_affinity;
+struct r2dglp_affinity;
 #endif
 
-typedef struct ikglp_heap_node
+typedef struct r2dglp_heap_node
 {
 	struct task_struct *task;
 	struct binheap_node node;
-} ikglp_heap_node_t;
+} r2dglp_heap_node_t;
 
 struct fifo_queue;
-struct ikglp_wait_state;
+struct r2dglp_wait_state;
 struct fifo_queue;
 
-typedef struct ikglp_donee_heap_node
+typedef struct r2dglp_donee_heap_node
 {
 	struct task_struct *task;
 	struct fifo_queue *fq;
 
-    /* cross-linked with ikglp_wait_state_t of donor */
-	struct ikglp_wait_state *donor_info;
+    /* cross-linked with r2dglp_wait_state_t of donor */
+	struct r2dglp_wait_state *donor_info;
 
 	struct binheap_node node;
-} ikglp_donee_heap_node_t;
+} r2dglp_donee_heap_node_t;
 
-typedef enum ikglp_states
+typedef enum r2dglp_states
 {
-	IKGLP_INVL = 0,
-	IKGLP_FQ,
-	IKGLP_PQ,
-	IKGLP_DONOR
-} ikglp_states_t;
+	R2DGLP_INVL = 0,
+	R2DGLP_FQ,
+	R2DGLP_PQ,
+	R2DGLP_DONOR
+} r2dglp_states_t;
 
 /*
-   Maintains the state of a request as it goes through the IKGLP.
+   Maintains the state of a request as it goes through the R2DGLP.
    There are three exclusive wait states:
     (1) as a donor
     (2) in the PQ
     (3) in the FQ
 */
-typedef struct ikglp_wait_state {
+typedef struct r2dglp_wait_state {
 	struct task_struct	*task;  /* pointer back to the requesting task */
 
-	ikglp_states_t		cur_q;
+	r2dglp_states_t		cur_q;
 	/* data for x-highest-prio tasks */
-	ikglp_heap_node_t	global_heap_node;
+	r2dglp_heap_node_t	global_heap_node;
 
     /* TODO: put these fields in an appropriate union since wait
        states are exclusive. */
@@ -59,17 +59,17 @@ typedef struct ikglp_wait_state {
 	/** Data for whilst in FIFO Queue **/
 	wait_queue_t		fq_node;
 	struct fifo_queue	*fq;
-	ikglp_donee_heap_node_t	donee_heap_node;
+	r2dglp_donee_heap_node_t	donee_heap_node;
 
 	/** Data for whilst in PQ **/
-	ikglp_heap_node_t	pq_node;
+	r2dglp_heap_node_t	pq_node;
 
 	/** Data for whilst a donor **/
-    /* cross-linked with donee's ikglp_donee_heap_node_t */
-	ikglp_donee_heap_node_t	*donee_info;
+    /* cross-linked with donee's r2dglp_donee_heap_node_t */
+	r2dglp_donee_heap_node_t	*donee_info;
 	struct nested_info	prio_donation;
 	struct binheap_node	node;
-} ikglp_wait_state_t;
+} r2dglp_wait_state_t;
 
 /* struct for FIFO mutex with priority inheritance */
 struct fifo_queue
@@ -78,8 +78,8 @@ struct fifo_queue
 	struct task_struct* owner;
 
 	/* used for bookkeepping */
-	ikglp_heap_node_t global_heap_node;
-	ikglp_donee_heap_node_t donee_heap_node;
+	r2dglp_heap_node_t global_heap_node;
+	r2dglp_donee_heap_node_t donee_heap_node;
 
 	struct task_struct* hp_waiter;
 	unsigned int count; /* number of waiters + holder */
@@ -96,8 +96,8 @@ struct fifo_queue
 	unsigned int is_vunlocked:1;
 };
 
-/* Main IKGLP data structure. */
-struct ikglp_semaphore
+/* Main R2DGLP data structure. */
+struct r2dglp_semaphore
 {
 	struct litmus_lock litmus_lock;
 
@@ -126,27 +126,27 @@ struct ikglp_semaphore
 	struct binheap donors;          /* max-heap, ordered by base priority */
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
-	struct ikglp_affinity *aff_obs; /* pointer to affinity observer */
+	struct r2dglp_affinity *aff_obs; /* pointer to affinity observer */
 #endif
 };
 
-static inline struct ikglp_semaphore* ikglp_from_lock(struct litmus_lock* lock)
+static inline struct r2dglp_semaphore* r2dglp_from_lock(struct litmus_lock* lock)
 {
-	return container_of(lock, struct ikglp_semaphore, litmus_lock);
+	return container_of(lock, struct r2dglp_semaphore, litmus_lock);
 }
 
-int ikglp_lock(struct litmus_lock* l);
-int ikglp_unlock(struct litmus_lock* l);
-void ikglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t);
-void ikglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t);
+int r2dglp_lock(struct litmus_lock* l);
+int r2dglp_unlock(struct litmus_lock* l);
+void r2dglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t);
+void r2dglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t);
 
-int ikglp_close(struct litmus_lock* l);
-void ikglp_free(struct litmus_lock* l);
-struct litmus_lock* ikglp_new(unsigned int m, struct litmus_lock_ops*,
+int r2dglp_close(struct litmus_lock* l);
+void r2dglp_free(struct litmus_lock* l);
+struct litmus_lock* r2dglp_new(unsigned int m, struct litmus_lock_ops*,
 				void* __user arg);
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
-struct ikglp_queue_info
+struct r2dglp_queue_info
 {
 	struct fifo_queue* q;
 	lt_t estimated_len;
@@ -154,33 +154,33 @@ struct ikglp_queue_info
 	unsigned int *nr_aff_users;
 };
 
-/* routines for IKGLP to call to get advice on queueing operations */
-typedef struct fifo_queue* (*advise_enqueue_t)(struct ikglp_affinity* aff,
+/* routines for R2DGLP to call to get advice on queueing operations */
+typedef struct fifo_queue* (*advise_enqueue_t)(struct r2dglp_affinity* aff,
 				struct task_struct* t);
-typedef ikglp_wait_state_t* (*advise_steal_t)(struct ikglp_affinity* aff,
+typedef r2dglp_wait_state_t* (*advise_steal_t)(struct r2dglp_affinity* aff,
 				struct fifo_queue* dst);
-typedef ikglp_donee_heap_node_t* (*advise_donee_t)(struct ikglp_affinity* aff,
+typedef r2dglp_donee_heap_node_t* (*advise_donee_t)(struct r2dglp_affinity* aff,
 				struct task_struct* t);
-typedef ikglp_wait_state_t* (*advise_donor_t)(struct ikglp_affinity* aff,
+typedef r2dglp_wait_state_t* (*advise_donor_t)(struct r2dglp_affinity* aff,
 				struct fifo_queue* dst);
 
-/* routines for IKGLP to notify the affinity observer about changes in mutex state */
-typedef void (*notify_enqueue_t)(struct ikglp_affinity* aff,
+/* routines for R2DGLP to notify the affinity observer about changes in mutex state */
+typedef void (*notify_enqueue_t)(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t);
-typedef void (*notify_dequeue_t)(struct ikglp_affinity* aff,
+typedef void (*notify_dequeue_t)(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t);
-typedef void (*notify_acquire_t)(struct ikglp_affinity* aff,
+typedef void (*notify_acquire_t)(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t);
-typedef void (*notify_free_t)(struct ikglp_affinity* aff,
+typedef void (*notify_free_t)(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq, struct task_struct* t);
-typedef int (*notify_exit_t)(struct ikglp_affinity* aff,
+typedef int (*notify_exit_t)(struct r2dglp_affinity* aff,
 				struct task_struct* t);
 
 /* convert a replica # to a GPU (includes offsets & simult user folding) */
-typedef int (*replica_to_resource_t)(struct ikglp_affinity* aff,
+typedef int (*replica_to_resource_t)(struct r2dglp_affinity* aff,
 				struct fifo_queue* fq);
 
-struct ikglp_affinity_ops
+struct r2dglp_affinity_ops
 {
 	advise_enqueue_t advise_enqueue;
 	advise_steal_t advise_steal;
@@ -196,11 +196,11 @@ struct ikglp_affinity_ops
 	replica_to_resource_t replica_to_resource;
 };
 
-struct ikglp_affinity
+struct r2dglp_affinity
 {
 	struct affinity_observer obs;
-	struct ikglp_affinity_ops *ops;
-	struct ikglp_queue_info *q_info;
+	struct r2dglp_affinity_ops *ops;
+	struct r2dglp_queue_info *q_info;
 	unsigned int *nr_cur_users_on_rsrc;
 	unsigned int *nr_aff_on_rsrc;
 	unsigned int offset;
@@ -210,20 +210,20 @@ struct ikglp_affinity
 	unsigned int relax_max_fifo_len:1;
 };
 
-static inline struct ikglp_affinity* ikglp_aff_obs_from_aff_obs(
+static inline struct r2dglp_affinity* r2dglp_aff_obs_from_aff_obs(
 				struct affinity_observer* aff_obs)
 {
-	return container_of(aff_obs, struct ikglp_affinity, obs);
+	return container_of(aff_obs, struct r2dglp_affinity, obs);
 }
 
-int ikglp_aff_obs_close(struct affinity_observer*);
-void ikglp_aff_obs_free(struct affinity_observer*);
+int r2dglp_aff_obs_close(struct affinity_observer*);
+void r2dglp_aff_obs_free(struct affinity_observer*);
 
 #ifdef CONFIG_LITMUS_NVIDIA
-struct affinity_observer* ikglp_gpu_aff_obs_new(
+struct affinity_observer* r2dglp_gpu_aff_obs_new(
 				struct affinity_observer_ops* aff,
 				void* __user arg);
-struct affinity_observer* ikglp_simple_gpu_aff_obs_new(
+struct affinity_observer* r2dglp_simple_gpu_aff_obs_new(
 				struct affinity_observer_ops* aff,
 				void* __user arg);
 #endif /* end LITMUS_NVIDIA */

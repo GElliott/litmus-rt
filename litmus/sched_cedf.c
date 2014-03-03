@@ -1318,9 +1318,11 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	 * that we are still linked. Multiple calls to request_exit_np() don't
 	 * hurt.
 	 */
-	if (np && (out_of_time || preempt || sleep)) {
-		unlink(entry->scheduled);
-		request_exit_np(entry->scheduled);
+	if (np) {
+		if (out_of_time || sleep)
+			unlink(entry->scheduled);
+		if (out_of_time || sleep || preempt)
+			request_exit_np(entry->scheduled);
 	}
 
 	/* Any task that is preemptable and either exhausts its execution

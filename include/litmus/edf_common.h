@@ -26,8 +26,10 @@ int edf_max_heap_base_priority_order(struct binheap_node *a,
 				struct binheap_node *b);
 int edf_min_heap_base_priority_order(struct binheap_node *a,
 				struct binheap_node *b);
+int edf_preemption_needed(rt_domain_t* rt, struct task_struct *t);
+#ifdef CONFIG_LITMUS_NESTED_LOCKING
 int __edf_higher_prio(struct task_struct* first, comparison_mode_t first_mode,
 				struct task_struct* second, comparison_mode_t second_mode);
-int edf_preemption_needed(rt_domain_t* rt, struct task_struct *t);
+#endif
 
 #endif

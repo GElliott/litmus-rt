@@ -1042,4 +1042,24 @@ asmlinkage long sys_litmus_unlock(int sem_od)
 	return -ENOSYS;
 }
 
+asmlinkage long sys_litmus_should_yield_lock(int lock_od)
+{
+	return -ENOSYS;
+}
+
+asmlinkage long sys_litmus_dgl_lock(void* __user usr_dgl_ods, int dgl_size)
+{
+	return -ENOSYS;
+}
+
+asmlinkage long sys_litmus_dgl_unlock(void* __user usr_dgl_ods, int dgl_size)
+{
+	return -ENOSYS;
+}
+
+asmlinkage long sys_litmus_dgl_should_yield_lock(void* __user usr_dgl_ods,
+				int dgl_size)
+{
+	return -ENOSYS;
+}
 #endif /* end CONFIG_LITMUS_LOCKING */

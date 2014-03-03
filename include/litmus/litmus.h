@@ -117,9 +117,8 @@ inline static int budget_remaining(struct task_struct* t) {
 	clear_bit(flag_nr, &tsk_rt(t)->budget.flags))
 #define bt_flags_reset(t) (\
 	tsk_rt(t)->budget.flags = 0)
-//#define should_requeue_preempted_job(t)
 #define requeue_preempted_job(t) \
-	(t && !is_completed(t) && !tsk_rt(t)->dont_requeue && \
+	(t && !is_completed(t)  && \
 	 (!budget_exhausted(t) || !budget_enforced(t)))
 
 /* release policy macros */

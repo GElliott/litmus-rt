@@ -59,6 +59,11 @@ long default_wait_for_release_at(lt_t release_time)
 	struct task_struct *t = current;
 	unsigned long flags;
 
+	tsk_rt(t)->job_params.backlog = 0;
+	tsk_rt(t)->job_params.is_backlogged_job = 0;
+	tsk_rt(t)->budget.suspend_timestamp = 0;
+	bt_flag_clear(t, BTF_BUDGET_EXHAUSTED);
+
 	local_irq_save(flags);
 	tsk_rt(t)->sporadic_release_time = release_time;
 	smp_wmb();

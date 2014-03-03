@@ -80,43 +80,24 @@ static long do_wait_for_ts_release(struct timespec *wake)
 
 	if (!ret) {
 		/* Completion succeeded, setup release time. */
-		ret = litmus->wait_for_release_at(
-			wait.ts_release_time + get_rt_phase(current));
-#if 0 /* PORT RECHECK */
 		if (is_rt) {
-			lt_t phasedRelease = wait.ts_release_time
-					+ t->rt_param.task_params.phase;
-			*wake = ns_to_timespec(phasedRelease);
-
-			/* Setting this flag before releasing ensures that this CPU
-			 * will be the next CPU to requeue the task on a ready or
-			 * release queue. Cleared by prepare_for_next_period()
-			 */
-			tsk_rt(current)->dont_requeue = 1;
-			tsk_rt(t)->completed = 1;
-			tsk_rt(t)->job_params.backlog = 0;
-			tsk_rt(t)->job_params.is_backlogged_job = 0;
-			tsk_rt(t)->budget.suspend_timestamp = 0;
-			bt_flag_clear(t, BTF_BUDGET_EXHAUSTED);
-			mb();
-
-			/* completion succeeded, set up release. subtract off
-			 * period because schedule()->job_completion() will
-			 * advances us to the correct time */
-			/* TODO: pfair might require pass through release_at... */
-			setup_release(t, phasedRelease - t->rt_param.task_params.period);
-			schedule();
+			lt_t phased_release = wait.ts_release_time + get_rt_phase(current);
+			*wake = ns_to_timespec(phased_release);
+			ret = litmus->wait_for_release_at(phased_release);
 		}
 		else {
-			/* sleep until our release time */
-			if (litmus_clock() < wait.ts_release_time) {
+			/* Not a real-time task, so we can't use litmus to manage the
+			   release. Just sleep until the appropriate time.
+			   Note: Phased releases are not supported.
+			*/
+			lt_t now = litmus_clock();
+			if (now < wait.ts_release_time) {
 				ktime_t remaining =
-						ns_to_ktime(wait.ts_release_time - litmus_clock());
+						ns_to_ktime(wait.ts_release_time - now);
 				schedule_hrtimeout(&remaining, HRTIMER_MODE_REL);
 			}
 			*wake = ns_to_timespec(wait.ts_release_time);
 		}
-#endif
 	} else {
 		/* We were interrupted, must cleanup list. */
 		mutex_lock(&task_release_lock);

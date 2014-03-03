@@ -657,6 +657,7 @@ static int do_plugin_switch(void *_plugin)
 			if(!litmus->get_domain_proc_info(&domain_info))
 				activate_domain_proc(domain_info);
 			goto out;
+		}
 
 		litmus = plugin;  /* optimistic switch */
 		mb();

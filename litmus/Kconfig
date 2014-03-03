@@ -76,24 +76,6 @@ choice
 	help
 		Select the prioritization method for auxillary tasks.
 
-config PREFER_LOCAL_LINKING
-       bool "Link newly arrived tasks locally if possible"
-       depends on SMP
-       default y
-       help
-          In linking-based schedulers such as GSN-EDF, if an idle CPU processes
-	  a job arrival (i.e., when a job resumed or was released), it can
-	  either link the task to itself and schedule it immediately (to avoid
-	  unnecessary scheduling latency) or it can try to link it to the CPU
-	  where it executed previously (to maximize cache affinity, at the
-	  expense of increased latency due to the need to send an IPI).
-
-	  In lightly loaded systems, this option can significantly reduce
-	  scheduling latencies. In heavily loaded systems (where CPUs are
-	  rarely idle), it will likely make hardly a difference.
-
-	  If unsure, say yes.
-
 config REALTIME_AUX_TASK_PRIORITY_BOOSTED
 	bool "Boosted"
 	help
@@ -128,6 +110,24 @@ config REALTIME_AUX_TASK_PRIORITY_INHERITANCE
 		_indirectly_ inherit the priority of the blocked rt task via the lock
 		holder.
 endchoice
+
+config PREFER_LOCAL_LINKING
+       bool "Link newly arrived tasks locally if possible"
+       depends on SMP
+       default y
+       help
+          In linking-based schedulers such as GSN-EDF, if an idle CPU processes
+	  a job arrival (i.e., when a job resumed or was released), it can
+	  either link the task to itself and schedule it immediately (to avoid
+	  unnecessary scheduling latency) or it can try to link it to the CPU
+	  where it executed previously (to maximize cache affinity, at the
+	  expense of increased latency due to the need to send an IPI).
+
+	  In lightly loaded systems, this option can significantly reduce
+	  scheduling latencies. In heavily loaded systems (where CPUs are
+	  rarely idle), it will likely make hardly a difference.
+
+	  If unsure, say yes.
 
 config BUG_ON_MIGRATION_DEADLOCK
 	bool "Panic on suspected migration deadlock"

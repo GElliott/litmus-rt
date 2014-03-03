@@ -605,6 +605,11 @@ out:
 
 void litmus_clear_state(struct task_struct* tsk)
 {
+#ifdef CONFIG_LITMUS_LOCKING
+	BUG_ON(!tsk_rt(tsk)->inh_task_linkbacks);
+	kfree(tsk_rt(tsk)->inh_task_linkbacks);
+#endif
+
     BUG_ON(bheap_node_in_heap(tsk_rt(tsk)->heap_node));
     bheap_node_free(tsk_rt(tsk)->heap_node);
     release_heap_free(tsk_rt(tsk)->rel_heap);
@@ -627,18 +632,6 @@ void litmus_exit_task(struct task_struct* tsk)
 #endif
 
 		litmus->task_exit(tsk);
-
-#ifdef CONFIG_LITMUS_LOCKING
-		BUG_ON(!tsk_rt(tsk)->inh_task_linkbacks);
-		kfree(tsk_rt(tsk)->inh_task_linkbacks);
-#endif
-
-		BUG_ON(bheap_node_in_heap(tsk_rt(tsk)->heap_node));
-		bheap_node_free(tsk_rt(tsk)->heap_node);
-		release_heap_free(tsk_rt(tsk)->rel_heap);
-
-		atomic_dec(&rt_task_count);
-		reinit_litmus_state(tsk, 1);
 	}
 }
 
@@ -654,24 +647,27 @@ static int do_plugin_switch(void *_plugin)
 		ret = litmus->deactivate_plugin();
 		if (0 != ret) {
 			/* reactivate the old proc info */
-			if(!litmus->get_domain_proc_info(&domain_info))
+			if (!litmus->get_domain_proc_info(&domain_info))
 				activate_domain_proc(domain_info);
 			goto out;
 		}
 
 		litmus = plugin;  /* optimistic switch */
 		mb();
-
 		ret = litmus->activate_plugin();
+
 		if (0 != ret) {
+			/* fail to Linux */
 			printk(KERN_INFO "Can't activate %s (%d).\n",
 				litmus->plugin_name, ret);
-			litmus = &linux_sched_plugin; /* fail to Linux */
+			litmus = &linux_sched_plugin;
 			ret = litmus->activate_plugin();
 			BUG_ON(ret);
-			if(!litmus->get_domain_proc_info(&domain_info))
-				activate_domain_proc(domain_info);
 		}
+
+		if (!litmus->get_domain_proc_info(&domain_info))
+			activate_domain_proc(domain_info);
+
 		printk(KERN_INFO "Switched to LITMUS^RT plugin %s.\n",
 						litmus->plugin_name);
 	} else

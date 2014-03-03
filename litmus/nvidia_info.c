@@ -21,7 +21,10 @@
 
 #include <litmus/binheap.h>
 
-#if defined(CONFIG_NV_DRV_331_13)
+#if defined(CONFIG_NV_DRV_331_44)
+#define NV_MAJOR_V 331
+#define NV_MINOR_V 44
+#elif defined(CONFIG_NV_DRV_331_13)
 #define NV_MAJOR_V 331
 #define NV_MINOR_V 13
 #elif defined(CONFIG_NV_DRV_325_15)
@@ -91,6 +94,9 @@ typedef struct
 	NvU32	domain;
 	NvU8	bus;
 	NvU8	slot;
+#if NV_MINOR_V == 44
+	NvU8	function;
+#endif
 	NvU16	vendor_id;
 	NvU16	device_id;
 	NvBool	valid;
@@ -107,7 +113,7 @@ typedef struct
 #endif
 	int	flags;
 
-#if NV_MAJOR_V <= 331
+#if NV_MAJOR_V < 331
 	/* PCI config info */
 	NvU32 domain;
 	NvU16 bus;
@@ -192,10 +198,22 @@ typedef struct litmus_nv_linux_state_s
 	struct timer_list rc_timer;
 
 	/* lock for linux-specific data, not used by core rm */
+#if !defined(CONFIG_NV_DRV_USES_MUTEX)
 	struct semaphore ldata_lock;
+#else
+	struct mutex ldata_lock;
+#endif
+
+#if NV_MAJOR_V >= 331 && NV_MINOR_V >= 44
+	struct proc_dir_entry *proc_dir;
+#endif
 
 	/* lock for linux-specific alloc queue */
+#if !defined(CONFIG_NV_DRV_USES_MUTEX)
 	struct semaphore at_lock;
+#else
+	struct mutex at_lock;
+#endif
 
 	/* !!! This field is all that we're after to determine
 	   !!! the device number of the GPU that spawned a given
@@ -237,7 +255,7 @@ dump_nvidia_info(const struct tasklet_struct *t)
 			  nvstate,
 			  nvstate->priv,
 			  nvstate->os_state,
-#if NV_MAJOR_V <= 331
+#if NV_MAJOR_V < 331
 			  nvstate->domain,
 			  nvstate->bus,
 			  nvstate->slot,
@@ -488,7 +506,10 @@ u32 get_work_nv_device_num(const struct work_struct *t)
 	const int DEVICE_NUM_OFFSET = sizeof(struct work_struct);
 	void* state = (void*)(t);
 	void** device_num_ptr = state + DEVICE_NUM_OFFSET;
-	return(*((u32*)(*device_num_ptr)));
+
+	/* pray NVIDIA will aways set "data" to device ID pointer */
+	u32 device_num = *((u32*)(*device_num_ptr));
+	return(device_num);
 }
 
 
@@ -726,26 +747,36 @@ int nv_schedule_work_klmirqd(struct work_struct *work)
 {
 	unsigned long flags;
 	u32 nvidia_device = get_work_nv_device_num(work);
-	struct task_struct* klmirqd_th =
-			get_and_lock_nvklmworkqd_thread(nvidia_device, &flags);
+	struct task_struct* klmirqd_th;
+	int ret = 0;
 
-	if (likely(klmirqd_th)) {
-		TRACE("Handling NVIDIA workq for device %u (klmirqd: %s/%d) at %llu\n",
-			nvidia_device,
-			klmirqd_th->comm,
-			klmirqd_th->pid,
-			litmus_clock());
-
-		sched_trace_work_release(effective_priority(klmirqd_th),
-						nvidia_device);
-
-		if (likely(litmus_schedule_work(work, klmirqd_th))) {
-			unlock_nvklmworkqd_thread(nvidia_device, &flags);
-			return 1; /* success */
-		}
+	if (nvidia_device >= NV_DEVICE_NUM) {
+		TRACE("Could not determine GPU source of work item: %u\n", nvidia_device);
+		goto out;
 	}
 
-	return 0;
+	klmirqd_th = get_and_lock_nvklmworkqd_thread(nvidia_device, &flags);
+	if (unlikely(!klmirqd_th)) {
+		TRACE("Could not find klmirqd thread for GPU %u\n", nvidia_device);
+		goto out;
+	}
+
+	TRACE("Handling NVIDIA workq for device %u (klmirqd: %s/%d) at %llu\n",
+		nvidia_device,
+		klmirqd_th->comm,
+		klmirqd_th->pid,
+		litmus_clock());
+
+	sched_trace_work_release(effective_priority(klmirqd_th),
+					nvidia_device);
+
+	if (likely(litmus_schedule_work(work, klmirqd_th))) {
+		unlock_nvklmworkqd_thread(nvidia_device, &flags);
+		ret = 1; /* success */
+	}
+
+out:
+	return ret;
 }
 #endif /* end LITMUS_NVIDIA_WORKQ_ON || WORKQ_ON_DEDICATED */
 

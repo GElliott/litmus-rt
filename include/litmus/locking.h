@@ -9,6 +9,7 @@
 
 #include <litmus/binheap.h>
 
+struct litmus_lock;
 struct litmus_lock_ops;
 
 #ifdef CONFIG_LITMUS_NESTED_LOCKING

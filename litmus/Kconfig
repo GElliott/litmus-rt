@@ -563,6 +563,15 @@ config LITMUS_AFFINITY_AWARE_GPU_ASSINGMENT
 
 		If unsure, say No.
 
+config NV_DRV_USES_MUTEX
+	bool "Use mutex in NV driver."
+	depends on LITMUS_NVIDIA
+	default n
+	help
+		Enable this option if your nvidia driver was manually patched
+		to replace its use of Linux "struct semaphore" with
+		"struct mutex".  The later option is more real-time-friendly.
+
 config NV_DEVICE_NUM
 	int "Number of NVIDIA GPUs."
 	depends on LITMUS_NVIDIA
@@ -574,7 +583,7 @@ config NV_DEVICE_NUM
 
 choice
 	prompt "CUDA/Driver Version Support"
-	default NV_DRV_319_37
+	default NV_DRV_331_44
 	depends on LITMUS_NVIDIA
 	help
 		Select the version of NVIDIA driver to support.
@@ -584,6 +593,12 @@ choice
 		will have to be manually compared against
 		<driver>/kernel/nv.h and nv-linux.h in the driver's
 		GPL shim layer.
+
+config NV_DRV_331_44
+	bool "331.44 (CUDA 6.0 RC1)"
+	depends on LITMUS_NVIDIA && REALTIME_AUX_TASKS
+	help
+		NV Driver 331.44. (Released with CUDA 6.0 RC1.)
 
 config NV_DRV_331_13
 	bool "331.13 (post-CUDA 5.5)"

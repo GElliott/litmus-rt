@@ -1,9 +1,9 @@
 #ifndef __FP_MATH_H__
 #define __FP_MATH_H__
 
+#ifdef __KERNEL__
 #include <linux/math64.h>
-
-#ifndef __KERNEL__
+#else
 #include <stdint.h>
 #define abs(x) (((x) < 0) ? -(x) : x)
 #endif
@@ -34,7 +34,11 @@ static inline fp_t FP(fpbuf_t x)
 /* divide two integers to obtain a fixed point value  */
 static inline fp_t _frac(fpbuf_t a, fpbuf_t b)
 {
+#ifdef __KERNEL__
 	return _fp(div64_s64(FP(a).val, (b)));
+#else
+	return _fp(FP(a).val / (b));
+#endif
 }
 
 static inline fpbuf_t _point(fp_t x)

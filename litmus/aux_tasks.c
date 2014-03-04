@@ -543,12 +543,19 @@ static long __do_disable_aux_tasks(int flags)
 								retval, temp_retval);
 						}
 					}
-
-					tsk_rt(t)->task_params.period = 0;
+				}
+				else {
+					TRACE_CUR("%s/%d is not a real-time task.\n",
+						t->comm, t->pid);
 				}
 
+				tsk_rt(t)->task_params.period = 0;
 				tsk_rt(t)->is_aux_task = 0;
 			}
+			else {
+				TRACE_CUR("%s/%d is not an aux task.\n", t->comm, t->pid);
+			}
+
 			t = next_thread(t);
 		} while(t != leader);
 	}
@@ -562,9 +569,14 @@ asmlinkage long sys_set_aux_tasks(int flags)
 
 	read_lock_irq(&tasklist_lock);
 
-	retval = (flags & AUX_ENABLE) ?
-		__do_enable_aux_tasks(flags) :
-		__do_disable_aux_tasks(flags);
+	if (flags & AUX_ENABLE) {
+		TRACE_CUR("enabling aux tasks\n");
+		retval = __do_enable_aux_tasks(flags);
+	}
+	else {
+		TRACE_CUR("DISabling aux tasks\n");
+		retval = __do_disable_aux_tasks(flags);
+	}
 
 	read_unlock_irq(&tasklist_lock);
 

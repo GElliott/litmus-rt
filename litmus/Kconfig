@@ -422,7 +422,7 @@ config SCHED_DEBUG_TRACE
 config SCHED_DEBUG_TRACE_SHIFT
 	int "Buffer size for TRACE() buffer"
 	depends on SCHED_DEBUG_TRACE
-	range 14 22
+	range 14 24
 	default 18
 	help
 		Select the amount of memory needed per for the TRACE() buffer, as a

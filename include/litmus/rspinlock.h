@@ -44,6 +44,7 @@ do {\
 	if (unlikely(irqs_disabled() && \
 			atomic_read(&(lock)->owner) == smp_processor_id())) { \
 		local_irq_save(flags); /* useless. makes compiler happy though */ \
+		mb(); \
 		++(lock)->rcount; \
 	} else { \
 		raw_spin_lock_irqsave(&(lock)->baselock, flags); \
@@ -54,6 +55,7 @@ do {\
 #define raw_rspin_lock(lock) \
 do {\
 	if (unlikely(atomic_read(&(lock)->owner) == smp_processor_id())) { \
+		mb(); \
 		++(lock)->rcount; \
 	} else { \
 		raw_spin_lock(&(lock)->baselock); \
@@ -68,6 +70,7 @@ do {\
 do {\
 	if (unlikely((lock)->rcount > 0)) { \
 		--(lock)->rcount; \
+		mb(); \
 		local_irq_restore(flags); /* useless. makes compiler happy though */ \
 	} else {\
 		atomic_set(&(lock)->owner, NO_CPU); \
@@ -79,6 +82,7 @@ do {\
 do {\
 	if (unlikely((lock)->rcount > 0)) { \
 		--(lock)->rcount; \
+		mb(); \
 	} else {\
 		atomic_set(&(lock)->owner, NO_CPU); \
 		raw_spin_unlock(&(lock)->baselock); \
@@ -129,6 +133,7 @@ do {\
 	if (unlikely(irqs_disabled() && \
 			atomic_read(&(lock)->owner) == smp_processor_id())) { \
 		local_irq_save(flags); /* useless. makes compiler happy though */ \
+		mb(); \
 		++(lock)->rcount; \
 	} else { \
 		spin_lock_irqsave(&(lock)->baselock, flags); \
@@ -139,6 +144,7 @@ do {\
 #define rspin_lock(lock) \
 do {\
 	if (unlikely(atomic_read(&(lock)->owner) == smp_processor_id())) { \
+		mb(); \
 		++(lock)->rcount; \
 	} else { \
 		spin_lock(&(lock)->baselock); \
@@ -153,6 +159,7 @@ do {\
 do {\
 	if (unlikely((lock)->rcount > 0)) { \
 		--(lock)->rcount; \
+		mb(); \
 		local_irq_restore(flags); /* useless. makes compiler happy though */ \
 	} else {\
 		atomic_set(&(lock)->owner, NO_CPU); \
@@ -164,6 +171,7 @@ do {\
 do {\
 	if (unlikely((lock)->rcount > 0)) { \
 		--(lock)->rcount; \
+		mb(); \
 	} else {\
 		atomic_set(&(lock)->owner, NO_CPU); \
 		spin_unlock(&(lock)->baselock); \

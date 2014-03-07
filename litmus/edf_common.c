@@ -62,7 +62,7 @@ int edf_higher_prio(struct task_struct* first, struct task_struct* second)
 	struct task_struct *second_task = second;
 
 	/* There is no point in comparing a task to itself. */
-	if (first && first == second) {
+	if (unlikely(first && first == second)) {
 		TRACE_CUR("WARNING: pointless edf priority comparison: %s/%d\n",
 			first->comm, first->pid);
 		return 0;

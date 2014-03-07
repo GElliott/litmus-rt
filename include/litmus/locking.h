@@ -295,7 +295,7 @@ struct litmus_lock_ops {
 
 void suspend_for_lock(void);
 int wake_up_for_lock(struct task_struct* t);
-int flush_pending_wakes(void);
+void flush_pending_wakes(void);
 void init_wake_queues(void);
 
 /* thread safe?? */

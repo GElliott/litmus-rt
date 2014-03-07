@@ -2589,8 +2589,6 @@ static long cedf_activate_plugin(void)
 	init_nvidia_info();
 #endif
 
-	init_wake_queues();
-
 	clusters_allocated = 1;
 	free_cpumask_var(mask);
 

@@ -897,63 +897,49 @@ void suspend_for_lock(void)
 #endif
 }
 
-#define WAKE_Q_SZ	32
+static DEFINE_PER_CPU(wait_queue_head_t, pending_wake_queue);
 
-typedef struct wake_queue
+void __init init_wake_queues(void)
 {
-	/* TODO: Make this a wait queue / linked list */
-	struct task_struct *to_wake[WAKE_Q_SZ];
-	int count;
-} wake_queue_t;
+	int cpu;
+	wait_queue_head_t *q;
 
-DEFINE_PER_CPU(wake_queue_t, wqueues);
-
-void init_wake_queues()
-{
-	int cpu = 0;
 	for_each_online_cpu(cpu) {
-		wake_queue_t *q = &per_cpu(wqueues, cpu);
-		memset(q, 0, sizeof(*q));
+		q = &per_cpu(pending_wake_queue, cpu);
+		init_waitqueue_head(q);
 	}
 }
 
 int wake_up_for_lock(struct task_struct* t)
 {
 	/* queues up wakes for waking on unlock exit */
+	/* IRQs should be disabled */
 
-	int ret = 1; /* mimic success of wake_up_process() */
-	wake_queue_t *q;
+	wait_queue_head_t *q;
 
-	TRACE_TASK(t, "is queued for wakeup\n");
-	q = &per_cpu(wqueues, smp_processor_id());
-	q->to_wake[q->count] = t;
-	++(q->count);
+	TRACE_TASK(t, "queuing for wake-up\n");
 
-	BUG_ON(q->count >= WAKE_Q_SZ);
+	init_waitqueue_entry(&tsk_rt(t)->wait, t);
+	q = &per_cpu(pending_wake_queue, smp_processor_id());
 
-	return ret;
+	/* by-pass the lock since irqs are already disabled and this
+	   queue is only touched by this CPU. */
+	__add_wait_queue(q, &tsk_rt(t)->wait);
+
+	return 1; /* mimic success of wake_up_process() */
 }
 
-int flush_pending_wakes()
+void flush_pending_wakes(void)
 {
-	int count = 0, i;
-	wake_queue_t *q;
-
-	q = &per_cpu(wqueues, smp_processor_id());
-	for(i = 0; i < q->count; ++i) {
-		if (q->to_wake[i]) {
-			struct task_struct *t = q->to_wake[i];
-			q->to_wake[i] = NULL;
-
-			TRACE_TASK(t, "is being woken up\n");
-			wake_up_process(t);
-			++count;
-		}
+	/* IRQs should be disabled */
+	wait_queue_head_t *q = &per_cpu(pending_wake_queue, smp_processor_id());
+	if (waitqueue_active(q)) {
+		TRACE_CUR("flushing pending wake-ups\n");
+		wake_up_all_locked(q);
+		/* empty the queue ourselves, since the tasks we're waking
+		   don't even know about this queue data structure */
+		INIT_LIST_HEAD(&q->task_list);
 	}
-	WARN_ON(count != q->count);
-	q->count = 0;
-
-	return count;
 }
 
 void set_inh_task_linkback(struct task_struct* t, struct task_struct* linkto)

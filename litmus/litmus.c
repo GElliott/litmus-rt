@@ -912,6 +912,10 @@ static int __init _init_litmus(void)
 		printk("Could not register kill rt tasks magic sysrq.\n");
 #endif
 
+#ifdef CONFIG_LITMUS_LOCKING
+	init_wake_queues();
+#endif
+
 	init_litmus_proc();
 
 #ifdef CONFIG_SCHED_CPU_AFFINITY

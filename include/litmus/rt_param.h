@@ -399,6 +399,9 @@ struct rt_param {
 
 	struct litmus_lock* outermost_lock;
 	unsigned int	virtually_unlocked:1;
+
+	/* wait-queue entry for pending wakeups */
+	wait_queue_t	wait;
 #endif
 
 	/* user controlled parameters */

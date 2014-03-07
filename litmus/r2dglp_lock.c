@@ -854,6 +854,7 @@ int r2dglp_lock(struct litmus_lock* l)
 	tsk_rt(t)->blocked_lock_data = (unsigned long)&wait;
 
 	flush_pending_wakes();
+
 	raw_spin_unlock_irqrestore(&sem->real_lock, more_flags);
 	unlock_global_irqrestore(dgl_lock, flags);
 

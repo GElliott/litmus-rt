@@ -378,6 +378,11 @@ static noinline void link_task_to_cpu(struct task_struct* linked,
 				tmp = sched->linked;
 				linked->rt_param.linked_on = sched->cpu;
 				sched->linked = linked;
+
+				/* EDF-compare may complain that we compare a task
+				 * to itself. This is possible since 'linked' is
+				 * temporarily linked to two CPUs while we perform
+				 * this update. This is fixed just a few lines below. */
 				update_cpu_position(sched);
 				linked = tmp;
 			}
@@ -1477,13 +1482,15 @@ static void cedf_task_wake_up(struct task_struct *t)
 	cedf_domain_t *cluster;
 	lt_t now;
 
+	TRACE_TASK(t, "wake_up at %llu\n", litmus_clock());
+
 	cluster = task_cpu_cluster(t);
 
 	raw_readyq_lock_irqsave(&cluster->cluster_lock, flags);
 
-	now = litmus_clock();
-	TRACE_TASK(t, "wake_up at %llu\n", now);
+	set_task_state(t, TASK_RUNNING);
 
+	now = litmus_clock();
 	if (is_sporadic(t) && is_tardy(t, now)) {
 		release_at(t, now);
 		sched_trace_task_release(t);
@@ -1938,8 +1945,9 @@ static int __decrease_priority_inheritance(struct task_struct* t,
 		if (prio_inh)
 			budget_state_machine_chgprio(t,prio_inh,on_inherit);
 
-		if(tsk_rt(t)->scheduled_on != NO_CPU) {
-			TRACE_TASK(t, "is scheduled.\n");
+		if(tsk_rt(t)->linked_on != NO_CPU) {
+			TRACE_TASK(t, "is linked on %d and scheduled on %d.\n",
+				tsk_rt(t)->linked_on, tsk_rt(t)->scheduled_on);
 
 			/* link back to new inheritance */
 			if (prio_inh)

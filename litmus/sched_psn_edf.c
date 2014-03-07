@@ -353,6 +353,9 @@ static void psnedf_task_wake_up(struct task_struct *task)
 
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
 	raw_readyq_lock_irqsave(&pedf->slock, flags);
+
+	set_task_state(task, TASK_RUNNING);
+
 	BUG_ON(is_queued(task));
 	now = litmus_clock();
 	if (is_sporadic(task) && is_tardy(task, now)

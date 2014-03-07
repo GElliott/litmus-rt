@@ -630,6 +630,9 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
 
 	raw_readyq_lock_irqsave(&gsnedf_lock, flags);
+
+	set_task_state(task, TASK_RUNNING);
+
 	now = litmus_clock();
 	if (is_sporadic(task) && is_tardy(task, now)) {
 		/* new sporadic release */
@@ -1001,8 +1004,7 @@ static struct litmus_lock* gsnedf_new_fmlp(void)
 	if (!sem)
 		return NULL;
 
-	sem->owner   = NULL;
-	sem->hp_waiter = NULL;
+	memset(sem, 0, sizeof(*sem));
 	init_waitqueue_head(&sem->wait);
 	sem->litmus_lock.ops = &gsnedf_fmlp_lock_ops;
 

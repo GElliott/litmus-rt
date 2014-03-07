@@ -710,6 +710,8 @@ static void pfair_task_wake_up(struct task_struct *t)
 
 	raw_readyq_lock_irqsave(cluster_lock(cluster), flags);
 
+	set_task_state(t, TASK_RUNNING);
+
 	/* If a task blocks and wakes before its next job release,
 	 * then it may resume if it is currently linked somewhere
 	 * (as if it never blocked at all). Otherwise, we have a

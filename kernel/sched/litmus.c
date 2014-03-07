@@ -250,7 +250,7 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		 * WARNING: this needs to be re-evaluated when porting
 		 *		  to newer kernel versions.
 		 */
-		p->state = TASK_RUNNING;
+//		p->state = TASK_RUNNING;
 		litmus->task_wake_up(p);
 
 		rq->litmus.nr_running++;

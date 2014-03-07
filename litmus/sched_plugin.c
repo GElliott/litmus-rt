@@ -86,6 +86,7 @@ static void litmus_dummy_task_new(struct task_struct *t, int on_rq, int running)
 
 static void litmus_dummy_task_wake_up(struct task_struct *task)
 {
+	set_task_state(task, TASK_RUNNING);
 }
 
 static void litmus_dummy_task_block(struct task_struct *task)

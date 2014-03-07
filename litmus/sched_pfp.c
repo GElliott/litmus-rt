@@ -363,6 +363,8 @@ static void pfp_task_wake_up(struct task_struct *task)
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
 	raw_readyq_lock_irqsave(&pfp->slock, flags);
 
+	set_task_state(task, TASK_RUNNING);
+
 #ifdef CONFIG_LITMUS_LOCKING
 	/* Should only be queued when processing a fake-wake up due to a
 	 * migration-related state change. */

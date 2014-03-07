@@ -331,12 +331,10 @@ static void r2dglp_refresh_owners_prio_decrease(struct fifo_queue *fq,
 	struct task_struct *new_max_eff_prio;
 
 	if(!owner) {
-		TRACE_CUR("No owner.  Returning.\n");
+		TRACE_CUR("No owner. Returning.\n");
 		unlock_fine_irqrestore(&sem->lock, flags);
 		return;
 	}
-
-	TRACE_CUR("r2dglp_refresh_owners_prio_decrease\n");
 
 	raw_spin_lock(&tsk_rt(owner)->hp_blocked_tasks_lock);
 
@@ -855,6 +853,7 @@ int r2dglp_lock(struct litmus_lock* l)
 
 	tsk_rt(t)->blocked_lock_data = (unsigned long)&wait;
 
+	flush_pending_wakes();
 	raw_spin_unlock_irqrestore(&sem->real_lock, more_flags);
 	unlock_global_irqrestore(dgl_lock, flags);
 

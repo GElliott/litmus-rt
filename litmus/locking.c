@@ -112,7 +112,6 @@ asmlinkage long sys_litmus_lock(int lock_od)
 	long err = -EINVAL;
 	struct od_table_entry* entry;
 	struct litmus_lock* l;
-	unsigned long flags;
 
 	TS_SYSCALL_IN_START;
 
@@ -125,7 +124,6 @@ asmlinkage long sys_litmus_lock(int lock_od)
 		l = get_lock(entry);
 		TRACE_CUR("Attempts to lock %d\n", l->ident);
 
-		local_irq_save(flags);
 		err = l->ops->lock(l);
 		if (!err) {
 			sched_trace_lock(current, l->ident, 1);
@@ -137,8 +135,6 @@ asmlinkage long sys_litmus_lock(int lock_od)
 				tsk_rt(current)->outermost_lock = l;
 			}
 		}
-		flush_pending_wakes();
-		local_irq_restore(flags);
 	}
 
 	/* Note: task my have been suspended or preempted in between! Take this
@@ -488,12 +484,14 @@ static long do_litmus_dgl_lock(dgl_wait_state_t *dgl_wait)
 
 		TRACE_CUR("Suspending for lock %d\n", first_primary->ident);
 
-		TS_DGL_LOCK_SUSPEND;
 
 		/* free dgl_lock before suspending */
 		raw_spin_unlock_irqrestore(dgl_lock, irqflags);
 		flush_pending_wakes();
 		local_irq_restore(kludge_flags);
+
+		TS_DGL_LOCK_SUSPEND;
+
 		suspend_for_lock();
 
 		TS_DGL_LOCK_RESUME;
@@ -559,12 +557,13 @@ static long do_litmus_dgl_atomic_lock(dgl_wait_state_t *dgl_wait)
 
 		TRACE_CUR("Suspending for lock %d\n", l->ident);
 
-		TS_DGL_LOCK_SUSPEND;
-
 		/* free dgl_lock before suspending */
 		raw_spin_unlock_irqrestore(dgl_lock, irqflags);
 		flush_pending_wakes();
 		local_irq_restore(kludge_flags);
+
+		TS_DGL_LOCK_SUSPEND;
+
 		suspend_for_lock();
 
 		TS_DGL_LOCK_RESUME;
@@ -902,6 +901,7 @@ void suspend_for_lock(void)
 
 typedef struct wake_queue
 {
+	/* TODO: Make this a wait queue / linked list */
 	struct task_struct *to_wake[WAKE_Q_SZ];
 	int count;
 } wake_queue_t;

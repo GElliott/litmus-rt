@@ -248,6 +248,8 @@ int kfmlp_lock(struct litmus_lock* l)
 			sem->aff_obs->ops->notify_enqueue(sem->aff_obs, my_queue, t);
 #endif
 
+		flush_pending_wakes();
+
 		/* release lock before sleeping */
 		spin_unlock_irqrestore(&sem->lock, flags);
 

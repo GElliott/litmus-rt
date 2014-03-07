@@ -787,6 +787,7 @@ int prioq_mutex_lock(struct litmus_lock* l)
 			unlock_fine_irqrestore(&mutex->lock, flags);
 		}
 
+		flush_pending_wakes();
 		unlock_global_irqrestore(dgl_lock, flags);
 
 		TS_LOCK_SUSPEND;
@@ -1026,7 +1027,6 @@ out:
 #endif
 
 	unlock_global_irqrestore(dgl_lock, flags);
-	TRACE_TASK(t, "-- Freed lock %d --\n", l->ident);
 
 	return err;
 }
@@ -1349,7 +1349,7 @@ int prioq_mutex_close(struct litmus_lock* l)
 	struct prioq_mutex *mutex = prioq_mutex_from_lock(l);
 	unsigned long flags;
 
-	int owner;
+	int is_owner;
 
 #ifdef CONFIG_LITMUS_DGL_SUPPORT
 	raw_spinlock_t *dgl_lock = litmus->get_dgl_spinlock(t);
@@ -1358,14 +1358,14 @@ int prioq_mutex_close(struct litmus_lock* l)
 	lock_global_irqsave(dgl_lock, flags);
 	lock_fine_irqsave(&mutex->lock, flags);
 
-	owner = (mutex->owner == t);
+	is_owner = (mutex->owner == t);
 
 	unlock_fine_irqrestore(&mutex->lock, flags);
 	unlock_global_irqrestore(dgl_lock, flags);
 
 	/*
 	 TODO: Currently panic.  FIX THIS!
-	if (owner)
+	if (is_owner)
 		prioq_mutex_unlock(l);
 	*/
 

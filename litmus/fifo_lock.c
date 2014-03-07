@@ -273,6 +273,8 @@ int fifo_mutex_lock(struct litmus_lock* l)
 			unlock_fine_irqrestore(&mutex->lock, flags);
 		}
 
+		flush_pending_wakes();
+
 		unlock_global_irqrestore(dgl_lock, flags);
 
 		TS_LOCK_SUSPEND;

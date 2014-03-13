@@ -456,5 +456,6 @@ void init_budget_tracker(struct budget_tracker* bt,
 	hrtimer_init(&bt->timer.timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	bt->timer.timer.function = __on_timeout;
 	bt->ops = ops;
-	INIT_BINHEAP_NODE(&bt->top_m_node);
+	INIT_SBINHEAP_NODE(&bt->top_m_node);
+	INIT_BINHEAP_NODE(&bt->not_top_m_node);
 }

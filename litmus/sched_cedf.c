@@ -133,8 +133,7 @@ typedef struct clusterdomain {
 	raw_spinlock_t dgl_lock;
 #endif
 
-	int		top_m_size;
-	struct binheap	top_m;
+	struct sbinheap top_m;
 	struct binheap	not_top_m;
 
 } cedf_domain_t;
@@ -163,7 +162,7 @@ static unsigned int gpu_cluster_size;
 inline static const struct task_struct* binheap_node_to_task(const struct binheap_node *bn)
 {
 	const struct budget_tracker *bt =
-		binheap_entry(bn, struct budget_tracker, top_m_node);
+		binheap_entry(bn, struct budget_tracker, not_top_m_node);
 	const struct task_struct *t =
 		container_of(
 			 container_of(bt, struct rt_param, budget),
@@ -180,11 +179,23 @@ static int cedf_max_heap_base_priority_order(const struct binheap_node *a,
 	return __edf_higher_prio(t_a, BASE, t_b, BASE);
 }
 
-static int cedf_min_heap_base_priority_order(const struct binheap_node *a,
-				const struct binheap_node *b)
+inline static const struct task_struct* sbinheap_node_to_task(const struct sbinheap_node *bn)
 {
-	const struct task_struct* t_a = binheap_node_to_task(a);
-	const struct task_struct* t_b = binheap_node_to_task(b);
+	const struct budget_tracker *bt =
+		sbinheap_entry(bn, struct budget_tracker, top_m_node);
+	const struct task_struct *t =
+		container_of(
+			 container_of(bt, struct rt_param, budget),
+				 struct task_struct,
+				 rt_param);
+	return t;
+}
+
+static int cedf_min_heap_base_priority_order(const struct sbinheap_node *a,
+				const struct sbinheap_node *b)
+{
+	const struct task_struct* t_a = sbinheap_node_to_task(a);
+	const struct task_struct* t_b = sbinheap_node_to_task(b);
 	return __edf_higher_prio(t_b, BASE, t_a, BASE);
 }
 
@@ -195,23 +206,23 @@ static void cedf_track_in_top_m(struct task_struct *t)
 	struct budget_tracker *bt;
 	struct task_struct *mth_highest;
 
-	if (binheap_is_in_heap(&tsk_rt(t)->budget.top_m_node))
+	if (sbinheap_is_in_heap(&tsk_rt(t)->budget.top_m_node) ||
+		binheap_is_in_heap(&tsk_rt(t)->budget.not_top_m_node))
 		return;
 
 	/* TODO: do cluster_size-1 if release master is in this cluster */
-	if (cluster->top_m_size < cluster_size) {
-		binheap_add(&tsk_rt(t)->budget.top_m_node, &cluster->top_m,
+	if (cluster->top_m.size < cluster_size) {
+		sbinheap_add(&tsk_rt(t)->budget.top_m_node, &cluster->top_m,
 					struct budget_tracker, top_m_node);
-		++cluster->top_m_size;
 		bt_flag_set(t, BTF_IS_TOP_M);
 		budget_state_machine(t,on_enter_top_m);
 
 		return;
 	}
 
-	BUG_ON(binheap_empty(&cluster->top_m));
+	BUG_ON(sbinheap_empty(&cluster->top_m));
 
-	bt = binheap_top_entry(&cluster->top_m, struct budget_tracker, top_m_node);
+	bt = sbinheap_top_entry(&cluster->top_m, struct budget_tracker, top_m_node);
 	mth_highest =
 		container_of(
 			container_of(bt, struct rt_param, budget),
@@ -219,23 +230,27 @@ static void cedf_track_in_top_m(struct task_struct *t)
 				rt_param);
 
 	if (__edf_higher_prio(t, BASE, mth_highest, BASE)) {
-		binheap_delete_root(&cluster->top_m, struct budget_tracker, top_m_node);
-		INIT_BINHEAP_NODE(&tsk_rt(mth_highest)->budget.top_m_node);
-		binheap_add(&tsk_rt(mth_highest)->budget.top_m_node,
+		/* remove m-th task from the top_m heap and add
+		   it to the not-top-m heap */
+		sbinheap_delete_root(&cluster->top_m, struct budget_tracker, top_m_node);
+		INIT_SBINHEAP_NODE(&tsk_rt(mth_highest)->budget.top_m_node);
+
+		binheap_add(&tsk_rt(mth_highest)->budget.not_top_m_node,
 					&cluster->not_top_m,
-					struct budget_tracker, top_m_node);
+					struct budget_tracker, not_top_m_node);
 		budget_state_machine(mth_highest,on_exit_top_m);
 		bt_flag_clear(mth_highest, BTF_IS_TOP_M);
 
-		binheap_add(&tsk_rt(t)->budget.top_m_node, &cluster->top_m,
+		/* add t to the top_m heap */
+		sbinheap_add(&tsk_rt(t)->budget.top_m_node, &cluster->top_m,
 					struct budget_tracker, top_m_node);
 		bt_flag_set(t, BTF_IS_TOP_M);
 		budget_state_machine(t,on_enter_top_m);
 	}
 	else {
-		binheap_add(&tsk_rt(t)->budget.top_m_node,
+		binheap_add(&tsk_rt(t)->budget.not_top_m_node,
 					&cluster->not_top_m,
-					struct budget_tracker, top_m_node);
+					struct budget_tracker, not_top_m_node);
 	}
 }
 
@@ -244,12 +259,14 @@ static void cedf_untrack_in_top_m(struct task_struct *t)
 	/* cluster lock must be held */
 	cedf_domain_t *cluster = task_cpu_cluster(t);
 
-	if (!binheap_is_in_heap(&tsk_rt(t)->budget.top_m_node))
+	if (!sbinheap_is_in_heap(&tsk_rt(t)->budget.top_m_node) &&
+		!binheap_is_in_heap(&tsk_rt(t)->budget.not_top_m_node))
 		return;
 
 	if (bt_flag_is_set(t, BTF_IS_TOP_M)) {
 		/* delete t's entry */
-		binheap_delete(&tsk_rt(t)->budget.top_m_node, &cluster->top_m);
+		sbinheap_delete(&tsk_rt(t)->budget.top_m_node, &cluster->top_m);
+		INIT_SBINHEAP_NODE(&tsk_rt(t)->budget.top_m_node);
 		budget_state_machine(t,on_exit_top_m);
 		bt_flag_clear(t, BTF_IS_TOP_M);
 
@@ -257,7 +274,7 @@ static void cedf_untrack_in_top_m(struct task_struct *t)
 		if(!binheap_empty(&cluster->not_top_m)) {
 			struct budget_tracker *bt =
 				binheap_top_entry(&cluster->not_top_m, struct budget_tracker,
-					top_m_node);
+					not_top_m_node);
 			struct task_struct *to_move =
 				container_of(
 					 container_of(bt, struct rt_param, budget),
@@ -265,21 +282,19 @@ static void cedf_untrack_in_top_m(struct task_struct *t)
 						 rt_param);
 
 			binheap_delete_root(&cluster->not_top_m, struct budget_tracker,
-						top_m_node);
-			INIT_BINHEAP_NODE(&tsk_rt(to_move)->budget.top_m_node);
+						not_top_m_node);
+			INIT_BINHEAP_NODE(&tsk_rt(to_move)->budget.not_top_m_node);
 
-			binheap_add(&tsk_rt(to_move)->budget.top_m_node,
+			sbinheap_add(&tsk_rt(to_move)->budget.top_m_node,
 						&cluster->top_m,
 						struct budget_tracker, top_m_node);
 			bt_flag_set(to_move, BTF_IS_TOP_M);
 			budget_state_machine(to_move,on_enter_top_m);
 		}
-		else {
-			--cluster->top_m_size;
-		}
 	}
 	else {
-		binheap_delete(&tsk_rt(t)->budget.top_m_node, &cluster->not_top_m);
+		binheap_delete(&tsk_rt(t)->budget.not_top_m_node, &cluster->not_top_m);
+		INIT_BINHEAP_NODE(&tsk_rt(t)->budget.not_top_m_node);
 	}
 }
 
@@ -2366,6 +2381,7 @@ static void cleanup_cedf(void)
 		for (i = 0; i < num_clusters; i++) {
 			kfree(cedf[i].cpus);
 			kfree(cedf[i].cpu_heap.buf);
+			kfree(cedf[i].top_m.buf);
 			free_cpumask_var(cedf[i].cpu_map);
 		}
 
@@ -2539,8 +2555,13 @@ static long cedf_activate_plugin(void)
 		atomic_set(&cedf[i].owner_cpu, NO_CPU);
 #endif
 
-		cedf[i].top_m_size = 0;
-		INIT_BINHEAP_HANDLE(&cedf[i].top_m, cedf_min_heap_base_priority_order);
+		cedf[i].top_m.compare = cedf_min_heap_base_priority_order;
+		cedf[i].top_m.size = 0;
+		cedf[i].top_m.max_size = cluster_size;
+		cedf[i].top_m.buf =
+			kmalloc(cluster_size * sizeof(struct sbinheap_node), GFP_ATOMIC);
+		INIT_SBINHEAP(&(cedf[i].top_m));
+
 		INIT_BINHEAP_HANDLE(&cedf[i].not_top_m,
 						cedf_max_heap_base_priority_order);
 

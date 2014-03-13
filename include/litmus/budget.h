@@ -5,6 +5,7 @@
 #include <linux/semaphore.h>
 
 #include <litmus/binheap.h>
+#include <litmus/sbinheap.h>
 
 struct enforcement_timer
 {
@@ -62,7 +63,9 @@ struct budget_tracker
 	const struct budget_tracker_ops* ops;
 	unsigned long flags;
 
-	struct binheap_node top_m_node;
+	sbinheap_node_t top_m_node;
+	binheap_node_t  not_top_m_node;
+
 	lt_t suspend_timestamp;
 };
 

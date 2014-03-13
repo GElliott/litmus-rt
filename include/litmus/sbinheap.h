@@ -156,16 +156,16 @@ static inline idx_t sbinheap_max_size(struct sbinheap *heap)
 }
 
 /* Returns true if sbinheap node is in a heap. */
-static inline int sbinheap_is_in_heap(const struct sbinheap_node *node)
+static inline int sbinheap_is_in_heap(const sbinheap_node_t *node)
 {
-	return node && (node->idx != SBINHEAP_BADIDX);
+	return *node && ((*node)->idx != SBINHEAP_BADIDX);
 }
 
 /* Returns true if sbinheap node is in given heap. */
-static inline int sbinheap_is_in_this_heap(const struct sbinheap_node *node,
+static inline int sbinheap_is_in_this_heap(const sbinheap_node_t *node,
 				const struct sbinheap* heap)
 {
-	return sbinheap_is_in_heap(node) && ((node - node->idx) == heap->buf);
+	return sbinheap_is_in_heap(node) && ((*node - (*node)->idx) == heap->buf);
 }
 
 typedef void (*sbinheap_for_each_t)(sbinheap_node_t node, void* args);

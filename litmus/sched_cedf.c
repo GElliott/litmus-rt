@@ -44,6 +44,7 @@
 
 #include <litmus/bheap.h>
 #include <litmus/binheap.h>
+#include <litmus/sbinheap.h>
 #include <litmus/trace.h>
 
 /* to configure the cluster size */
@@ -98,7 +99,7 @@ typedef struct  {
 	struct task_struct*	linked;		/* only RT tasks */
 	struct task_struct*	scheduled;	/* only RT tasks */
 	atomic_t		will_schedule;	/* prevent unneeded IPIs */
-	struct binheap_node	hn;
+	sbinheap_node_t	hn;
 } cpu_entry_t;
 
 /* one cpu_entry_t per CPU */
@@ -124,7 +125,7 @@ typedef struct clusterdomain {
 	/* map of this cluster cpus */
 	cpumask_var_t	cpu_map;
 	/* the cpus queue themselves according to priority in here */
-	struct binheap cpu_heap;
+	struct sbinheap cpu_heap;
 
 #define cluster_lock domain.ready_lock
 
@@ -299,10 +300,11 @@ static raw_spinlock_t* cedf_get_dgl_spinlock(struct task_struct *t)
  */
 #define VERBOSE_INIT
 
-static int cpu_lower_prio(const struct binheap_node *_a, const struct binheap_node *_b)
+static int cpu_lower_prio(const struct sbinheap_node *_a,
+		const struct sbinheap_node *_b)
 {
-	const cpu_entry_t *a = binheap_entry(_a, cpu_entry_t, hn);
-	const cpu_entry_t *b = binheap_entry(_b, cpu_entry_t, hn);
+	const cpu_entry_t *a = sbinheap_entry(_a, cpu_entry_t, hn);
+	const cpu_entry_t *b = sbinheap_entry(_b, cpu_entry_t, hn);
 
 	/* Note that a and b are inverted: we want the lowest-priority CPU at
 	 * the top of the heap.
@@ -317,17 +319,17 @@ static void update_cpu_position(cpu_entry_t *entry)
 {
 	cedf_domain_t *cluster = entry->cluster;
 
-	if (likely(binheap_is_in_heap(&entry->hn))) {
-		binheap_delete(&entry->hn, &cluster->cpu_heap);
+	if (likely(sbinheap_is_in_heap(&entry->hn))) {
+		sbinheap_delete(&entry->hn, &cluster->cpu_heap);
 	}
 
-	binheap_add(&entry->hn, &cluster->cpu_heap, cpu_entry_t, hn);
+	sbinheap_add(&entry->hn, &cluster->cpu_heap, cpu_entry_t, hn);
 }
 
 /* caller must hold cedf lock */
 static cpu_entry_t* lowest_prio_cpu(cedf_domain_t *cluster)
 {
-	return binheap_top_entry(&cluster->cpu_heap, cpu_entry_t, hn);
+	return sbinheap_top_entry(&cluster->cpu_heap, cpu_entry_t, hn);
 }
 
 static noinline void unlink(struct task_struct* t);
@@ -852,8 +854,8 @@ static enum hrtimer_restart cedf_simple_io_on_exhausted(struct task_struct *t,
 					if (tsk_rt(to_update)->linked_on != NO_CPU) {
 						cpu_entry_t *entry = &per_cpu(cedf_cpu_entries,
 										tsk_rt(to_update)->linked_on);
-						BUG_ON(!binheap_is_in_heap(&entry->hn));
-						binheap_delete(&entry->hn, &cluster->cpu_heap);
+						BUG_ON(!sbinheap_is_in_heap(&entry->hn));
+						sbinheap_delete(&entry->hn, &cluster->cpu_heap);
 					}
 				}
 				for (i = find_first_bit(&tsk_rt(t)->used_linkback_slots,
@@ -869,7 +871,7 @@ static enum hrtimer_restart cedf_simple_io_on_exhausted(struct task_struct *t,
 					if (tsk_rt(to_update)->linked_on != NO_CPU) {
 						cpu_entry_t *entry = &per_cpu(cedf_cpu_entries,
 										tsk_rt(to_update)->linked_on);
-						binheap_add(&entry->hn, &cluster->cpu_heap,
+						sbinheap_add(&entry->hn, &cluster->cpu_heap,
 										cpu_entry_t, hn);
 					}
 				}
@@ -1067,8 +1069,8 @@ static enum hrtimer_restart cedf_sobliv_on_exhausted(struct task_struct *t,
 					if (tsk_rt(to_update)->linked_on != NO_CPU) {
 						cpu_entry_t *entry = &per_cpu(cedf_cpu_entries,
 										tsk_rt(to_update)->linked_on);
-						BUG_ON(!binheap_is_in_heap(&entry->hn));
-						binheap_delete(&entry->hn, &cluster->cpu_heap);
+						BUG_ON(!sbinheap_is_in_heap(&entry->hn));
+						sbinheap_delete(&entry->hn, &cluster->cpu_heap);
 					}
 				}
 				for (i = find_first_bit(&tsk_rt(t)->used_linkback_slots,
@@ -1084,7 +1086,7 @@ static enum hrtimer_restart cedf_sobliv_on_exhausted(struct task_struct *t,
 					if (tsk_rt(to_update)->linked_on != NO_CPU) {
 						cpu_entry_t *entry = &per_cpu(cedf_cpu_entries,
 										tsk_rt(to_update)->linked_on);
-						binheap_add(&entry->hn, &cluster->cpu_heap,
+						sbinheap_add(&entry->hn, &cluster->cpu_heap,
 										cpu_entry_t, hn);
 					}
 				}
@@ -1775,9 +1777,9 @@ static int __increase_priority_inheritance(struct task_struct* t,
 			 * We can't use heap_decrease() here since
 			 * the cpu_heap is ordered in reverse direction, so
 			 * it is actually an increase. */
-			binheap_delete(&per_cpu(cedf_cpu_entries, linked_on).hn,
+			sbinheap_delete(&per_cpu(cedf_cpu_entries, linked_on).hn,
 						   &cluster->cpu_heap);
-			binheap_add(&per_cpu(cedf_cpu_entries, linked_on).hn,
+			sbinheap_add(&per_cpu(cedf_cpu_entries, linked_on).hn,
 						&cluster->cpu_heap, cpu_entry_t, hn);
 
 			/* tell prio_inh that we're __running__ with its priority */
@@ -2363,6 +2365,7 @@ static void cleanup_cedf(void)
 	if (clusters_allocated) {
 		for (i = 0; i < num_clusters; i++) {
 			kfree(cedf[i].cpus);
+			kfree(cedf[i].cpu_heap.buf);
 			free_cpumask_var(cedf[i].cpu_map);
 		}
 
@@ -2507,7 +2510,14 @@ static long cedf_activate_plugin(void)
 
 		cedf[i].cpus = kmalloc(cluster_size * sizeof(cpu_entry_t),
 				GFP_ATOMIC);
-		INIT_BINHEAP_HANDLE(&(cedf[i].cpu_heap), cpu_lower_prio);
+
+		cedf[i].cpu_heap.compare = cpu_lower_prio;
+		cedf[i].cpu_heap.size = 0;
+		cedf[i].cpu_heap.max_size = cluster_size;
+		cedf[i].cpu_heap.buf =
+			kmalloc(cluster_size * sizeof(struct sbinheap_node), GFP_ATOMIC);
+		INIT_SBINHEAP(&(cedf[i].cpu_heap));
+
 		edf_domain_init(&(cedf[i].domain), NULL, cedf_release_jobs);
 
 		if(!zalloc_cpumask_var(&cedf[i].cpu_map, GFP_ATOMIC))
@@ -2565,7 +2575,7 @@ static long cedf_activate_plugin(void)
 				memset(entry, 0, sizeof(*entry));
 				entry->cpu = ccpu;
 				entry->cluster = &cedf[i];
-				INIT_BINHEAP_NODE(&entry->hn);
+				INIT_SBINHEAP_NODE(&entry->hn);
 				mb();
 
 				++cpu_count;

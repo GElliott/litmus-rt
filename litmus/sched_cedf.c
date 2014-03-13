@@ -159,11 +159,11 @@ static int num_gpu_clusters;
 static unsigned int gpu_cluster_size;
 #endif
 
-inline static struct task_struct* binheap_node_to_task(struct binheap_node *bn)
+inline static const struct task_struct* binheap_node_to_task(const struct binheap_node *bn)
 {
-	struct budget_tracker *bt =
+	const struct budget_tracker *bt =
 		binheap_entry(bn, struct budget_tracker, top_m_node);
-	struct task_struct *t =
+	const struct task_struct *t =
 		container_of(
 			 container_of(bt, struct rt_param, budget),
 				 struct task_struct,
@@ -171,19 +171,19 @@ inline static struct task_struct* binheap_node_to_task(struct binheap_node *bn)
 	return t;
 }
 
-static int cedf_max_heap_base_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+static int cedf_max_heap_base_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	struct task_struct* t_a = binheap_node_to_task(a);
-	struct task_struct* t_b = binheap_node_to_task(b);
+	const struct task_struct* t_a = binheap_node_to_task(a);
+	const struct task_struct* t_b = binheap_node_to_task(b);
 	return __edf_higher_prio(t_a, BASE, t_b, BASE);
 }
 
-static int cedf_min_heap_base_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+static int cedf_min_heap_base_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	struct task_struct* t_a = binheap_node_to_task(a);
-	struct task_struct* t_b = binheap_node_to_task(b);
+	const struct task_struct* t_a = binheap_node_to_task(a);
+	const struct task_struct* t_b = binheap_node_to_task(b);
 	return __edf_higher_prio(t_b, BASE, t_a, BASE);
 }
 
@@ -299,10 +299,10 @@ static raw_spinlock_t* cedf_get_dgl_spinlock(struct task_struct *t)
  */
 #define VERBOSE_INIT
 
-static int cpu_lower_prio(struct binheap_node *_a, struct binheap_node *_b)
+static int cpu_lower_prio(const struct binheap_node *_a, const struct binheap_node *_b)
 {
-	cpu_entry_t *a = binheap_entry(_a, cpu_entry_t, hn);
-	cpu_entry_t *b = binheap_entry(_b, cpu_entry_t, hn);
+	const cpu_entry_t *a = binheap_entry(_a, cpu_entry_t, hn);
+	const cpu_entry_t *b = binheap_entry(_b, cpu_entry_t, hn);
 
 	/* Note that a and b are inverted: we want the lowest-priority CPU at
 	 * the top of the heap.

@@ -63,7 +63,7 @@ typedef void (*task_cleanup_t)	(struct task_struct *);
 /**************************** misc ***************************/
 
 /* Called to compare the scheduling priorities between two tasks */
-typedef int (*higher_prio_t)(struct task_struct* a, struct task_struct* b);
+typedef int (*higher_prio_t)(const struct task_struct* a, const struct task_struct* b);
 
 /************** locking and inheritance routines *************/
 #ifdef CONFIG_LITMUS_LOCKING
@@ -94,8 +94,8 @@ typedef void (*nested_increase_prio_t)(struct task_struct* t,
 typedef void (*nested_decrease_prio_t)(struct task_struct* t,
 				struct task_struct* prio_inh, raw_spinlock_t *to_unlock,
 				unsigned long irqflags, int budget_triggered);
-typedef int (*__higher_prio_t)(struct task_struct* a, comparison_mode_t a_mod,
-				struct task_struct* b, comparison_mode_t b_mod);
+typedef int (*__higher_prio_t)(const struct task_struct* a, comparison_mode_t a_mod,
+				const struct task_struct* b, comparison_mode_t b_mod);
 #endif /* end LITMUS_NESTED_LOCKING */
 
 #ifdef CONFIG_LITMUS_DGL_SUPPORT

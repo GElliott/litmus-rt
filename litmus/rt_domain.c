@@ -35,7 +35,7 @@ static int dummy_resched(rt_domain_t *rt)
 	return 0;
 }
 
-static int dummy_order(struct bheap_node* a, struct bheap_node* b)
+static int dummy_order(const struct bheap_node* a, const struct bheap_node* b)
 {
 	return 0;
 }

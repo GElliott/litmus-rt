@@ -12,10 +12,10 @@
 void fp_domain_init(rt_domain_t* rt, check_resched_needed_t resched,
 		    release_jobs_t release);
 
-int fp_higher_prio(struct task_struct* first,
-		   struct task_struct* second);
+int fp_higher_prio(const struct task_struct* first,
+		   const struct task_struct* second);
 
-int fp_ready_order(struct bheap_node* a, struct bheap_node* b);
+int fp_ready_order(const struct bheap_node* a, const struct bheap_node* b);
 
 #define FP_PRIO_BIT_WORDS (LITMUS_MAX_PRIORITY / BITS_PER_LONG)
 

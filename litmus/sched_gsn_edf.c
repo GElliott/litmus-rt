@@ -126,11 +126,11 @@ static rt_domain_t gsnedf;
 #define WANT_ALL_SCHED_EVENTS
  */
 
-static int cpu_lower_prio(struct bheap_node *_a, struct bheap_node *_b)
+static int cpu_lower_prio(const struct bheap_node *_a, const struct bheap_node *_b)
 {
-	cpu_entry_t *a, *b;
-	a = _a->value;
-	b = _b->value;
+	const cpu_entry_t *a = _a->value;
+	const cpu_entry_t *b = _b->value;
+
 	/* Note that a and b are inverted: we want the lowest-priority CPU at
 	 * the top of the heap.
 	 */

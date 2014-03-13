@@ -123,7 +123,7 @@ static long litmus_dummy_get_domain_proc_info(struct domain_proc_info **d)
 }
 
 #ifdef CONFIG_LITMUS_LOCKING
-static int litmus_dummy_compare(struct task_struct* a, struct task_struct* b)
+static int litmus_dummy_compare(const struct task_struct* a, const struct task_struct* b)
 {
 	TRACE_CUR("WARNING: Dummy compare function called!\n");
 	return 0;
@@ -175,8 +175,8 @@ static void litmus_dummy_nested_decrease_prio(struct task_struct* t,
 }
 
 static int litmus_dummy___compare(
-				struct task_struct* a, comparison_mode_t a_mod,
-				struct task_struct* b, comparison_mode_t b_mode)
+				const struct task_struct* a, comparison_mode_t a_mod,
+				const struct task_struct* b, comparison_mode_t b_mode)
 {
 	TRACE_CUR("WARNING: Dummy compare function called!\n");
 	return 0;

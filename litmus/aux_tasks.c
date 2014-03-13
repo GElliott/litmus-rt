@@ -387,15 +387,15 @@ out:
 	return retval;
 }
 
-static int aux_task_owner_max_priority_order(struct binheap_node *a,
-									   struct binheap_node *b)
+static int aux_task_owner_max_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	struct task_struct *d_a =
+	const struct task_struct *d_a =
 			container_of(binheap_entry(a, struct rt_param, aux_task_owner_node),
-							struct task_struct, rt_param);
-	struct task_struct *d_b =
+				struct task_struct, rt_param);
+	const struct task_struct *d_b =
 			container_of(binheap_entry(b, struct rt_param, aux_task_owner_node),
-							struct task_struct, rt_param);
+				struct task_struct, rt_param);
 
 	BUG_ON(!d_a);
 	BUG_ON(!d_b);

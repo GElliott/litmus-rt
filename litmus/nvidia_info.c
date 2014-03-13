@@ -642,8 +642,8 @@ static enum hrtimer_restart nvklmirqd_timer_func(struct hrtimer *timer)
 #endif
 
 
-static int gpu_owner_max_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+static int gpu_owner_max_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
 	struct task_struct *d_a =
 			container_of(

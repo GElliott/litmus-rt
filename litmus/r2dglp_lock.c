@@ -16,11 +16,11 @@
 
 #define R2DGLP_INVAL_DISTANCE 0x7FFFFFFF
 
-int r2dglp_max_heap_base_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+int r2dglp_max_heap_base_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	r2dglp_heap_node_t *d_a = binheap_entry(a, r2dglp_heap_node_t, node);
-	r2dglp_heap_node_t *d_b = binheap_entry(b, r2dglp_heap_node_t, node);
+	const r2dglp_heap_node_t *d_a = binheap_entry(a, r2dglp_heap_node_t, node);
+	const r2dglp_heap_node_t *d_b = binheap_entry(b, r2dglp_heap_node_t, node);
 
 	BUG_ON(!d_a);
 	BUG_ON(!d_b);
@@ -28,33 +28,34 @@ int r2dglp_max_heap_base_priority_order(struct binheap_node *a,
 	return litmus->__compare(d_a->task, BASE, d_b->task, BASE);
 }
 
-int r2dglp_min_heap_base_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+int r2dglp_min_heap_base_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	r2dglp_heap_node_t *d_a = binheap_entry(a, r2dglp_heap_node_t, node);
-	r2dglp_heap_node_t *d_b = binheap_entry(b, r2dglp_heap_node_t, node);
+	const r2dglp_heap_node_t *d_a = binheap_entry(a, r2dglp_heap_node_t, node);
+	const r2dglp_heap_node_t *d_b = binheap_entry(b, r2dglp_heap_node_t, node);
 
 	return litmus->__compare(d_b->task, BASE, d_a->task, BASE);
 }
 
-int r2dglp_donor_max_heap_base_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+int r2dglp_donor_max_heap_base_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	r2dglp_wait_state_t *d_a = binheap_entry(a, r2dglp_wait_state_t, node);
-	r2dglp_wait_state_t *d_b = binheap_entry(b, r2dglp_wait_state_t, node);
+	const  r2dglp_wait_state_t *d_a = binheap_entry(a, r2dglp_wait_state_t, node);
+	const r2dglp_wait_state_t *d_b = binheap_entry(b, r2dglp_wait_state_t, node);
 
 	return litmus->__compare(d_a->task, BASE, d_b->task, BASE);
 }
 
 
-int r2dglp_min_heap_donee_order(struct binheap_node *a,
-				struct binheap_node *b)
+int r2dglp_min_heap_donee_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	struct task_struct *prio_a, *prio_b;
+	const struct task_struct *prio_a;
+	const struct task_struct *prio_b;
 
-	r2dglp_donee_heap_node_t *d_a =
+	const r2dglp_donee_heap_node_t *d_a =
 		binheap_entry(a, r2dglp_donee_heap_node_t, node);
-	r2dglp_donee_heap_node_t *d_b =
+	const r2dglp_donee_heap_node_t *d_b =
 		binheap_entry(b, r2dglp_donee_heap_node_t, node);
 
 	if(!d_a->donor_info) {

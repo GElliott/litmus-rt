@@ -24,7 +24,7 @@
 
 #ifdef CONFIG_EDF_TIE_BREAK_HASH
 #include <linux/hash.h>
-static inline long edf_hash(struct task_struct *t)
+static inline long edf_hash(const struct task_struct *t)
 {
 	/* pid is 32 bits, so normally we would shove that into the
 	 * upper 32-bits and and put the job number in the bottom
@@ -52,14 +52,14 @@ static inline long edf_hash(struct task_struct *t)
  */
 #ifdef CONFIG_LITMUS_NESTED_LOCKING
 int __edf_higher_prio(
-	struct task_struct* first, comparison_mode_t first_mode,
-	struct task_struct* second, comparison_mode_t second_mode)
+	const struct task_struct* first, comparison_mode_t first_mode,
+	const struct task_struct* second, comparison_mode_t second_mode)
 #else
-int edf_higher_prio(struct task_struct* first, struct task_struct* second)
+int edf_higher_prio(const struct task_struct* first, const struct task_struct* second)
 #endif
 {
-	struct task_struct *first_task = first;
-	struct task_struct *second_task = second;
+	const struct task_struct *first_task = first;
+	const struct task_struct *second_task = second;
 
 	/* There is no point in comparing a task to itself. */
 	if (unlikely(first && first == second)) {
@@ -326,47 +326,47 @@ klmirqd_tie_break:
 }
 
 #ifdef CONFIG_LITMUS_NESTED_LOCKING
-int edf_higher_prio(struct task_struct* first, struct task_struct* second)
+int edf_higher_prio(const struct task_struct* first, const struct task_struct* second)
 {
 	return __edf_higher_prio(first, EFFECTIVE, second, EFFECTIVE);
 }
 
-int edf_max_heap_order(struct binheap_node *a, struct binheap_node *b)
+int edf_max_heap_order(const struct binheap_node *a, const struct binheap_node *b)
 {
-	struct nested_info *l_a = (struct nested_info *)binheap_entry(a,
+	const struct nested_info *l_a = (struct nested_info *)binheap_entry(a,
 					struct nested_info, hp_binheap_node);
-	struct nested_info *l_b = (struct nested_info *)binheap_entry(b,
+	const struct nested_info *l_b = (struct nested_info *)binheap_entry(b,
 					struct nested_info, hp_binheap_node);
 
 	return __edf_higher_prio(l_a->hp_waiter_eff_prio, EFFECTIVE,
 					l_b->hp_waiter_eff_prio, EFFECTIVE);
 }
 
-int edf_min_heap_order(struct binheap_node *a, struct binheap_node *b)
+int edf_min_heap_order(const struct binheap_node *a, const struct binheap_node *b)
 {
 	return edf_max_heap_order(b, a);  /* swap comparison */
 }
 
-int edf_max_heap_base_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+int edf_max_heap_base_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
-	struct nested_info *l_a = (struct nested_info *)binheap_entry(a,
+	const struct nested_info *l_a = (struct nested_info *)binheap_entry(a,
 					struct nested_info, hp_binheap_node);
-	struct nested_info *l_b = (struct nested_info *)binheap_entry(b,
+	const struct nested_info *l_b = (struct nested_info *)binheap_entry(b,
 					struct nested_info, hp_binheap_node);
 
 	return __edf_higher_prio(l_a->hp_waiter_eff_prio, BASE,
 					l_b->hp_waiter_eff_prio, BASE);
 }
 
-int edf_min_heap_base_priority_order(struct binheap_node *a,
-				struct binheap_node *b)
+int edf_min_heap_base_priority_order(const struct binheap_node *a,
+				const struct binheap_node *b)
 {
 	return edf_max_heap_base_priority_order(b, a);  /* swap comparison */
 }
 #endif
 
-int edf_ready_order(struct bheap_node* a, struct bheap_node* b)
+int edf_ready_order(const struct bheap_node* a, const struct bheap_node* b)
 {
 	return edf_higher_prio(bheap2task(a), bheap2task(b));
 }

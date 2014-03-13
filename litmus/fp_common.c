@@ -19,11 +19,11 @@
  *
  * both first and second may be NULL
  */
-int fp_higher_prio(struct task_struct* first,
-		   struct task_struct* second)
+int fp_higher_prio(const struct task_struct* first,
+		   const struct task_struct* second)
 {
-	struct task_struct *first_task = first;
-	struct task_struct *second_task = second;
+	const struct task_struct *first_task = first;
+	const struct task_struct *second_task = second;
 
 	/* There is no point in comparing a task to itself. */
 	if (unlikely(first && first == second)) {
@@ -80,7 +80,7 @@ int fp_higher_prio(struct task_struct* first,
 		return 0;
 }
 
-int fp_ready_order(struct bheap_node* a, struct bheap_node* b)
+int fp_ready_order(const struct bheap_node* a, const struct bheap_node* b)
 {
 	return fp_higher_prio(bheap2task(a), bheap2task(b));
 }

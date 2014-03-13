@@ -26,7 +26,7 @@ struct bheap {
 	struct bheap_node*	min;
 };
 
-typedef int (*bheap_prio_t)(struct bheap_node* a, struct bheap_node* b);
+typedef int (*bheap_prio_t)(const struct bheap_node* a, const struct bheap_node* b);
 
 void bheap_init(struct bheap* heap);
 void bheap_node_init(struct bheap_node** ref_to_bheap_node_ptr, void* value);

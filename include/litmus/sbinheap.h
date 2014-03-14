@@ -2,6 +2,7 @@
 #define STATIC_BINARY_HEAP_H
 
 #include <linux/kernel.h>
+#include <linux/bug.h>
 
 /**
  * Simple max-size binary heap with add, arbitrary delete, delete_root, and top
@@ -131,7 +132,7 @@ __sbinheap_add((heap), container_of((new_node), type, member), (new_node))
  *			 added to the heap.
  */
 #define sbinheap_decrease(orig_node, heap) \
-__sbinheap_decrease((orig_node), (heap))
+__sbinheap_decrease(*(orig_node), (heap))
 
 
 static inline void INIT_SBINHEAP(struct sbinheap *heap)
@@ -180,20 +181,20 @@ void __sbinheap_insert(struct sbinheap_node *new_node, struct sbinheap *heap);
 static inline void __sbinheap_add(struct sbinheap* heap,
 				void* data, struct sbinheap_node** ret)
 {
-	if (heap->size < heap->max_size) {
-		idx_t idx = (heap->size)++;
-		struct sbinheap_node *n = heap->buf + idx;
+	idx_t idx;
+	struct sbinheap_node *n;
 
-		n->idx = idx;
-		n->data = data;
-		n->ref_ptr = ret;
-		*ret = n;
+	BUG_ON(heap->size >= heap->max_size);
 
-		__sbinheap_insert(n, heap);
-	}
-	else {
-		*ret = NULL;
-	}
+	idx = (heap->size)++;
+	n = heap->buf + idx;
+
+	n->idx = idx;
+	n->data = data;
+	n->ref_ptr = ret;
+	*ret = n;
+
+	__sbinheap_insert(n, heap);
 }
 
 /**

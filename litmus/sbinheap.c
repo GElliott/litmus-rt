@@ -51,6 +51,8 @@ static void __sbinheap_for_each(struct sbinheap *heap,
 {
 	/* Apply fn to all nodes. Beware of recursion. */
 
+	/* TODO: Make this a flat for-loop to get rid recursion. */
+
 	/* pre-order */
 	fn(n, args);
 

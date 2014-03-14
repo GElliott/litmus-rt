@@ -3,6 +3,7 @@
 
 #include <litmus/litmus.h>
 #include <litmus/binheap.h>
+#include <litmus/sbinheap.h>
 #include <litmus/locking.h>
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
@@ -13,7 +14,9 @@ struct r2dglp_affinity;
 typedef struct r2dglp_heap_node
 {
 	struct task_struct *task;
-	struct binheap_node node;
+
+	sbinheap_node_t snode; /* static heap node */
+	binheap_node_t  dnode; /* dynamic heap node */
 } r2dglp_heap_node_t;
 
 struct fifo_queue;
@@ -28,7 +31,7 @@ typedef struct r2dglp_donee_heap_node
     /* cross-linked with r2dglp_wait_state_t of donor */
 	struct r2dglp_wait_state *donor_info;
 
-	struct binheap_node node;
+	sbinheap_node_t snode;
 } r2dglp_donee_heap_node_t;
 
 typedef enum r2dglp_states
@@ -66,9 +69,9 @@ typedef struct r2dglp_wait_state {
 
 	/** Data for whilst a donor **/
     /* cross-linked with donee's r2dglp_donee_heap_node_t */
-	r2dglp_donee_heap_node_t	*donee_info;
-	struct nested_info	prio_donation;
-	struct binheap_node	node;
+	r2dglp_donee_heap_node_t*	donee_info;
+	struct nested_info		prio_donation;
+	sbinheap_node_t 		snode;
 } r2dglp_wait_state_t;
 
 /* struct for FIFO mutex with priority inheritance */
@@ -110,12 +113,11 @@ struct r2dglp_semaphore
 	unsigned int max_in_fifos;
 	unsigned int nr_in_fifos;
 
-	struct binheap top_m;     /* min heap, base prio */
-	unsigned int top_m_size;  /* number of nodes in top_m */
+	struct sbinheap top_m;    /* min heap, base prio */
 
-	struct binheap not_top_m; /* max heap, ordered by base priority */
+	struct binheap  not_top_m; /* max heap, ordered by base priority */
 
-	struct binheap donees;	  /* min-heap, ordered by base priority */
+	struct sbinheap donees;	  /* min-heap, ordered by base priority */
 
     /* cached value - pointer to shortest fifo queue */
 	struct fifo_queue *shortest_fifo_queue;
@@ -123,7 +125,7 @@ struct r2dglp_semaphore
 	/* data structures for holding requests */
 	struct fifo_queue *fifo_queues; /* array nr_replicas in length */
 	struct binheap priority_queue;  /* max-heap, ordered by base priority */
-	struct binheap donors;          /* max-heap, ordered by base priority */
+	struct sbinheap donors;          /* max-heap, ordered by base priority */
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	struct r2dglp_affinity *aff_obs; /* pointer to affinity observer */

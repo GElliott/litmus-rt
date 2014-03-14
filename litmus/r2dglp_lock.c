@@ -28,8 +28,8 @@ int r2dglp_max_heap_base_priority_order(const struct binheap_node *a,
 	return litmus->__compare(d_a->task, BASE, d_b->task, BASE);
 }
 
-int r2dglp_min_heap_base_priority_order(const struct binheap_node *a,
-				const struct binheap_node *b)
+int r2dglp_min_heap_base_priority_order(const struct sbinheap_node *a,
+				const struct sbinheap_node *b)
 {
 	const r2dglp_heap_node_t *d_a = binheap_entry(a, r2dglp_heap_node_t, node);
 	const r2dglp_heap_node_t *d_b = binheap_entry(b, r2dglp_heap_node_t, node);
@@ -37,18 +37,18 @@ int r2dglp_min_heap_base_priority_order(const struct binheap_node *a,
 	return litmus->__compare(d_b->task, BASE, d_a->task, BASE);
 }
 
-int r2dglp_donor_max_heap_base_priority_order(const struct binheap_node *a,
-				const struct binheap_node *b)
+int r2dglp_donor_max_heap_base_priority_order(const struct sbinheap_node *a,
+				const struct sbinheap_node *b)
 {
-	const  r2dglp_wait_state_t *d_a = binheap_entry(a, r2dglp_wait_state_t, node);
+	const r2dglp_wait_state_t *d_a = binheap_entry(a, r2dglp_wait_state_t, node);
 	const r2dglp_wait_state_t *d_b = binheap_entry(b, r2dglp_wait_state_t, node);
 
 	return litmus->__compare(d_a->task, BASE, d_b->task, BASE);
 }
 
 
-int r2dglp_min_heap_donee_order(const struct binheap_node *a,
-				const struct binheap_node *b)
+int r2dglp_min_heap_donee_order(const struct sbinheap_node *a,
+				const struct sbinheap_node *b)
 {
 	const struct task_struct *prio_a;
 	const struct task_struct *prio_b;
@@ -146,7 +146,7 @@ static struct fifo_queue* r2dglp_find_shortest(struct r2dglp_semaphore *sem,
 
 static inline struct task_struct* r2dglp_mth_highest(struct r2dglp_semaphore *sem)
 {
-	return binheap_top_entry(&sem->top_m, r2dglp_heap_node_t, node)->task;
+	return sbinheap_top_entry(&sem->top_m, r2dglp_heap_node_t, node)->task;
 }
 
 static void r2dglp_add_global_list(struct r2dglp_semaphore *sem,
@@ -154,33 +154,33 @@ static void r2dglp_add_global_list(struct r2dglp_semaphore *sem,
 				r2dglp_heap_node_t *node)
 {
 	node->task = t;
-	INIT_BINHEAP_NODE(&node->node);
+	INIT_SBINHEAP_NODE(&node->snode);
+	INIT_BINHEAP_NODE(&node->dnode);
 
-	if(sem->top_m_size < sem->max_in_fifos) {
+	if(sem->top_m.size < sem->top_m.max_size) {
 		TRACE_CUR("Trivially adding %s/%d to top-m global list.\n",
 				  t->comm, t->pid);
-		binheap_add(&node->node, &sem->top_m, r2dglp_heap_node_t, node);
-		++(sem->top_m_size);
+		sbinheap_add(&node->snode, &sem->top_m, r2dglp_heap_node_t, snode);
 	}
 	else if(litmus->__compare(t, BASE, r2dglp_mth_highest(sem), BASE)) {
 		r2dglp_heap_node_t *evicted =
-			binheap_top_entry(&sem->top_m, r2dglp_heap_node_t, node);
+			sbinheap_top_entry(&sem->top_m, r2dglp_heap_node_t, snode);
 
 		TRACE_CUR("Adding %s/%d to top-m and evicting %s/%d.\n",
 				  t->comm, t->pid,
 				  evicted->task->comm, evicted->task->pid);
 
-		binheap_delete_root(&sem->top_m, r2dglp_heap_node_t, node);
-		INIT_BINHEAP_NODE(&evicted->node);
-		binheap_add(&evicted->node, &sem->not_top_m, r2dglp_heap_node_t, node);
+		sbinheap_delete_root(&sem->top_m, r2dglp_heap_node_t, snode);
+		INIT_SBINHEAP_NODE(&evicted->snode);
 
-		binheap_add(&node->node, &sem->top_m, r2dglp_heap_node_t, node);
+		binheap_add(&evicted->dnode, &sem->not_top_m, r2dglp_heap_node_t, dnode);
+		sbinheap_add(&node->snode, &sem->top_m, r2dglp_heap_node_t, snode);
 	}
 	else {
 		TRACE_CUR("Trivially adding %s/%d to not-top-m global list.\n",
 				  t->comm, t->pid);
 
-		binheap_add(&node->node, &sem->not_top_m, r2dglp_heap_node_t, node);
+		binheap_add(&node->dnode, &sem->not_top_m, r2dglp_heap_node_t, dnode);
 	}
 }
 
@@ -189,36 +189,37 @@ static void r2dglp_del_global_list(struct r2dglp_semaphore *sem,
 				struct task_struct *t,
 				r2dglp_heap_node_t *node)
 {
-	BUG_ON(!binheap_is_in_heap(&node->node));
+	BUG_ON(!(sbinheap_is_in_heap(&node->snode) || binheap_is_in_heap(&node->dnode)));
 
 	TRACE_CUR("Removing %s/%d from global list.\n", t->comm, t->pid);
 
-	if(binheap_is_in_this_heap(&node->node, &sem->top_m)) {
+	if(sbinheap_is_in_this_heap(&node->snode, &sem->top_m)) {
 		TRACE_CUR("%s/%d is in top-m\n", t->comm, t->pid);
 
-		binheap_delete(&node->node, &sem->top_m);
+		sbinheap_delete(&node->snode, &sem->top_m);
+		INIT_SBINHEAP_NODE(&node->snode);
 
 		if(!binheap_empty(&sem->not_top_m)) {
 			r2dglp_heap_node_t *promoted =
-				binheap_top_entry(&sem->not_top_m, r2dglp_heap_node_t, node);
+				binheap_top_entry(&sem->not_top_m, r2dglp_heap_node_t, dnode);
 
 			TRACE_CUR("Promoting %s/%d to top-m\n",
 					  promoted->task->comm, promoted->task->pid);
 
-			binheap_delete_root(&sem->not_top_m, r2dglp_heap_node_t, node);
-			INIT_BINHEAP_NODE(&promoted->node);
+			binheap_delete_root(&sem->not_top_m, r2dglp_heap_node_t, dnode);
+			INIT_BINHEAP_NODE(&promoted->dnode);
 
-			binheap_add(&promoted->node, &sem->top_m, r2dglp_heap_node_t, node);
+			sbinheap_add(&promoted->snode, &sem->top_m, r2dglp_heap_node_t, snode);
 		}
 		else {
 			TRACE_CUR("No one to promote to top-m.\n");
-			--(sem->top_m_size);
 		}
 	}
 	else {
 		TRACE_CUR("%s/%d is in not-top-m\n", t->comm, t->pid);
 
-		binheap_delete(&node->node, &sem->not_top_m);
+		binheap_delete(&node->dnode, &sem->not_top_m);
+		INIT_BINHEAP_NODE(&node->dnode);
 	}
 }
 
@@ -231,9 +232,9 @@ static void r2dglp_add_donees(struct r2dglp_semaphore *sem,
 	node->task = t;
 	node->donor_info = NULL;
 	node->fq = fq;
-	INIT_BINHEAP_NODE(&node->node);
+	INIT_SBINHEAP_NODE(&node->snode);
 
-	binheap_add(&node->node, &sem->donees, r2dglp_donee_heap_node_t, node);
+	sbinheap_add(&node->snode, &sem->donees, r2dglp_donee_heap_node_t, snode);
 }
 
 
@@ -273,7 +274,7 @@ static void r2dglp_refresh_owners_prio_increase(struct task_struct *t,
 			fq->nest.hp_waiter_eff_prio = effective_priority(fq->hp_waiter);
 
 			binheap_decrease(&fq->nest.hp_binheap_node,
-							 &tsk_rt(owner)->hp_blocked_tasks);
+				&tsk_rt(owner)->hp_blocked_tasks);
 			new_max_eff_prio = top_priority(&tsk_rt(owner)->hp_blocked_tasks);
 
 			if(new_max_eff_prio != old_max_eff_prio) {
@@ -414,14 +415,27 @@ static void r2dglp_remove_donation_from_owner(struct binheap_node *n,
 	struct task_struct *new_max_eff_prio;
 
 	BUG_ON(!owner);
+	BUG_ON(!binheap_is_in_heap(n));
 
 	raw_spin_lock(&tsk_rt(owner)->hp_blocked_tasks_lock);
 
 	old_max_eff_prio = top_priority(&tsk_rt(owner)->hp_blocked_tasks);
 
+	TRACE_CUR("Old effective priority: %s/%d\n",
+		(old_max_eff_prio) ?
+			old_max_eff_prio->comm : "null",
+		(old_max_eff_prio) ?
+			old_max_eff_prio->pid : 0);
+
 	binheap_delete(n, &tsk_rt(owner)->hp_blocked_tasks);
 
 	new_max_eff_prio = top_priority(&tsk_rt(owner)->hp_blocked_tasks);
+
+	TRACE_CUR("New effective priority: %s/%d\n",
+		(new_max_eff_prio) ?
+			new_max_eff_prio->comm : "null",
+		(new_max_eff_prio) ?
+			new_max_eff_prio->pid : 0);
 
 	if((old_max_eff_prio != new_max_eff_prio) &&
 	   (effective_priority(owner) == old_max_eff_prio))
@@ -554,7 +568,8 @@ static void __r2dglp_enqueue_on_fq(struct r2dglp_semaphore *sem,
 
 	/* update global list. */
 	if(likely(global_heap_node)) {
-		if(binheap_is_in_heap(&global_heap_node->node)) {
+		if(sbinheap_is_in_heap(&global_heap_node->snode) ||
+		   binheap_is_in_heap(&global_heap_node->dnode)) {
 			WARN_ON(1);
 			r2dglp_del_global_list(sem, t, global_heap_node);
 		}
@@ -590,8 +605,9 @@ static void r2dglp_enqueue_on_fq(struct r2dglp_semaphore *sem,
 			   "and wait.\n",
 			   r2dglp_get_idx(sem, fq));
 
-	INIT_BINHEAP_NODE(&wait->global_heap_node.node);
-	INIT_BINHEAP_NODE(&wait->donee_heap_node.node);
+	INIT_SBINHEAP_NODE(&wait->global_heap_node.snode);
+	INIT_BINHEAP_NODE(&wait->global_heap_node.dnode);
+	INIT_SBINHEAP_NODE(&wait->donee_heap_node.snode);
 
 	__r2dglp_enqueue_on_fq(sem, fq, wait,
 					&wait->global_heap_node, &wait->donee_heap_node);
@@ -608,8 +624,8 @@ static void __r2dglp_enqueue_on_pq(struct r2dglp_semaphore *sem,
 
 	wait->pq_node.task = wait->task; /* copy over task (little redundant...) */
 
-	binheap_add(&wait->pq_node.node, &sem->priority_queue,
-				r2dglp_heap_node_t, node);
+	binheap_add(&wait->pq_node.dnode, &sem->priority_queue,
+				r2dglp_heap_node_t, dnode);
 
 	wait->cur_q = R2DGLP_PQ;
 }
@@ -617,9 +633,10 @@ static void __r2dglp_enqueue_on_pq(struct r2dglp_semaphore *sem,
 static void r2dglp_enqueue_on_pq(struct r2dglp_semaphore *sem,
 				r2dglp_wait_state_t *wait)
 {
-	INIT_BINHEAP_NODE(&wait->global_heap_node.node);
-	INIT_BINHEAP_NODE(&wait->donee_heap_node.node);
-	INIT_BINHEAP_NODE(&wait->pq_node.node);
+	INIT_SBINHEAP_NODE(&wait->global_heap_node.snode);
+	INIT_BINHEAP_NODE(&wait->global_heap_node.dnode);
+	INIT_SBINHEAP_NODE(&wait->donee_heap_node.snode);
+	INIT_BINHEAP_NODE(&wait->pq_node.dnode);
 
 	__r2dglp_enqueue_on_pq(sem, wait);
 }
@@ -636,10 +653,11 @@ static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
 	struct task_struct *new_max_eff_prio;
 	struct task_struct *new_prio = NULL;
 
-	INIT_BINHEAP_NODE(&wait->global_heap_node.node);
-	INIT_BINHEAP_NODE(&wait->donee_heap_node.node);
-	INIT_BINHEAP_NODE(&wait->pq_node.node);
-	INIT_BINHEAP_NODE(&wait->node);
+	INIT_SBINHEAP_NODE(&wait->global_heap_node.snode);
+	INIT_BINHEAP_NODE(&wait->global_heap_node.dnode);
+	INIT_SBINHEAP_NODE(&wait->donee_heap_node.snode);
+	INIT_BINHEAP_NODE(&wait->pq_node.dnode);
+	INIT_SBINHEAP_NODE(&wait->snode);
 
 	/* Add donor to the global list. */
 	r2dglp_add_global_list(sem, t, &wait->global_heap_node);
@@ -648,25 +666,25 @@ static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	donee_node = (sem->aff_obs) ?
 		sem->aff_obs->ops->advise_donee_selection(sem->aff_obs, t) :
-		binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
+		sbinheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, snode);
 #else
-	donee_node = binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
+	donee_node = sbinheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, snode);
 #endif
 
 	donee = donee_node->task;
 
 	TRACE_TASK(t, "Donee selected: %s/%d\n", donee->comm, donee->pid);
 
-	TRACE_CUR("Temporarily removing %s/%d to donee list.\n",
+	TRACE_CUR("Temporarily removing %s/%d from donee list.\n",
 			  donee->comm, donee->pid);
 
     /* Remove from donee list */
-	binheap_delete(&donee_node->node, &sem->donees);
+	sbinheap_delete(&donee_node->snode, &sem->donees);
 
 	wait->donee_info = donee_node;
 
 	/* Add t to donor heap. */
-	binheap_add(&wait->node, &sem->donors, r2dglp_wait_state_t, node);
+	sbinheap_add(&wait->snode, &sem->donors, r2dglp_wait_state_t, snode);
 
 	/* Now adjust the donee's priority. */
 
@@ -686,7 +704,7 @@ static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
 				   "Moving old donor to PQ.\n",
 				   donee->comm, donee->pid, old_donor->comm, old_donor->pid);
 
-		binheap_delete(&old_wait->node, &sem->donors);
+		sbinheap_delete(&old_wait->snode, &sem->donors);
 
 		/* Remove donation from donee's inheritance heap. */
 		binheap_delete(&old_wait->prio_donation.hp_binheap_node,
@@ -704,8 +722,8 @@ static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
     TRACE_CUR("Adding %s/%d back to donee list.\n", donee->comm, donee->pid);
 
 	donee_node->donor_info = wait;
-	INIT_BINHEAP_NODE(&donee_node->node);
-	binheap_add(&donee_node->node, &sem->donees, r2dglp_donee_heap_node_t, node);
+	INIT_SBINHEAP_NODE(&donee_node->snode);
+	sbinheap_add(&donee_node->snode, &sem->donees, r2dglp_donee_heap_node_t, snode);
 
 	/* Add an inheritance/donation to the donee's inheritance heap. */
 	wait->prio_donation.lock = (struct litmus_lock*)sem;
@@ -891,7 +909,7 @@ static void __drop_from_donor(struct r2dglp_semaphore *sem,
 
 	TRACE_TASK(wait->task, "is being dropped from donor heap.\n");
 
-	binheap_delete(&wait->node, &sem->donors);
+	sbinheap_delete(&wait->snode, &sem->donors);
 	wait->cur_q = R2DGLP_INVL;
 }
 
@@ -923,7 +941,7 @@ static void __drop_from_pq(struct r2dglp_semaphore *sem,
 
 	TRACE_TASK(wait->task, "is being dropped from the PQ.\n");
 
-	binheap_delete(&wait->pq_node.node, &sem->priority_queue);
+	binheap_delete(&wait->pq_node.dnode, &sem->priority_queue);
 	wait->cur_q = R2DGLP_INVL;
 }
 
@@ -1080,7 +1098,7 @@ static void r2dglp_migrate_fq_to_owner_heap_nodes(struct r2dglp_semaphore *sem,
 	fq->global_heap_node = old_wait->global_heap_node;			/* copy */
 	r2dglp_add_global_list(sem, t, &fq->global_heap_node);		/* re-add */
 
-	binheap_delete(&old_wait->donee_heap_node.node, &sem->donees);  /* remove */
+	sbinheap_delete(&old_wait->donee_heap_node.snode, &sem->donees);  /* remove */
 	fq->donee_heap_node = old_wait->donee_heap_node;  /* copy */
 
 	if(fq->donee_heap_node.donor_info) {
@@ -1091,9 +1109,9 @@ static void r2dglp_migrate_fq_to_owner_heap_nodes(struct r2dglp_semaphore *sem,
 
 		fq->donee_heap_node.donor_info->donee_info = &fq->donee_heap_node;
 	}
-	INIT_BINHEAP_NODE(&fq->donee_heap_node.node);
-	binheap_add(&fq->donee_heap_node.node, &sem->donees,
-				r2dglp_donee_heap_node_t, node);  /* re-add */
+	INIT_SBINHEAP_NODE(&fq->donee_heap_node.snode);
+	sbinheap_add(&fq->donee_heap_node.snode, &sem->donees,
+				r2dglp_donee_heap_node_t, snode);  /* re-add */
 }
 
 
@@ -1256,14 +1274,14 @@ void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 		if (always_terminate_donation)
 			other_donor_info = donor_info;
 	}
-	else if(!binheap_empty(&sem->donors)) { /* No donor, move any donor to FQ */
+	else if(!sbinheap_empty(&sem->donors)) { /* No donor, move any donor to FQ */
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 		other_donor_info = (sem->aff_obs) ?
 			sem->aff_obs->ops->advise_donor_to_fq(sem->aff_obs, fq) :
-			binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
+			sbinheap_top_entry(&sem->donors, r2dglp_wait_state_t, snode);
 #else
 		other_donor_info =
-				binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
+			sbinheap_top_entry(&sem->donors, r2dglp_wait_state_t, snode);
 #endif
 
 		new_on_fq = other_donor_info->task;
@@ -1271,7 +1289,7 @@ void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 
 		/* update the donee's heap position. */
 		other_donor_info->donee_info->donor_info = NULL; /* clear cross-link */
-		binheap_decrease(&other_donor_info->donee_info->node, &sem->donees);
+		sbinheap_decrease(&other_donor_info->donee_info->snode, &sem->donees);
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 		if(sem->aff_obs) {
@@ -1396,8 +1414,9 @@ void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 					   donee->comm, donee->pid,
 					   r2dglp_get_idx(sem, other_fq));
 
-			r2dglp_remove_donation_from_owner(&other_donor_info->prio_donation.hp_binheap_node,
-							other_fq, sem, *flags);
+			r2dglp_remove_donation_from_owner(
+				&other_donor_info->prio_donation.hp_binheap_node,
+				other_fq, sem, *flags);
 
             /* there should be no contention!!!! */
 			lock_fine_irqsave(&sem->lock, *flags);
@@ -1408,7 +1427,7 @@ void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 					   r2dglp_get_idx(sem, other_fq));
 
 			r2dglp_remove_donation_from_fq_waiter(donee,
-							&other_donor_info->prio_donation.hp_binheap_node);
+				&other_donor_info->prio_donation.hp_binheap_node);
 			if(donee == other_fq->hp_waiter) {
 				TRACE_TASK(t, "Donee %s/%d was an hp_waiter of fq %d. "
                            "Rechecking hp_waiter.\n",
@@ -1490,8 +1509,10 @@ int r2dglp_unlock(struct litmus_lock* l)
 	TRACE_TASK(t, "Freeing replica %d.\n", r2dglp_get_idx(sem, fq));
 
 	/* Remove 't' from the heaps, but data in nodes will still be good. */
-	r2dglp_del_global_list(sem, t, &fq->global_heap_node);
-	binheap_delete(&fq->donee_heap_node.node, &sem->donees);
+	if(likely(!fq->is_vunlocked)) {
+		r2dglp_del_global_list(sem, t, &fq->global_heap_node);
+		sbinheap_delete(&fq->donee_heap_node.snode, &sem->donees);
+	}
 
 	fq->owner = NULL;  /* no longer owned!! */
 	--(fq->count);
@@ -1519,12 +1540,10 @@ int r2dglp_unlock(struct litmus_lock* l)
 	raw_spin_lock(&tsk_rt(t)->hp_blocked_tasks_lock);
 	{
 		int count = 0;
-
 		TRACE_TASK(t, "discarding inheritance because R2DGLP is outermost\n");
-
-		while(!binheap_empty(&tsk_rt(t)->hp_blocked_tasks)) {
+		while (!binheap_empty(&tsk_rt(t)->hp_blocked_tasks)) {
 			binheap_delete_root(&tsk_rt(t)->hp_blocked_tasks,
-								struct nested_info, hp_binheap_node);
+				struct nested_info, hp_binheap_node);
 			++count;
 		}
 
@@ -1535,7 +1554,7 @@ int r2dglp_unlock(struct litmus_lock* l)
 
 	if (likely(!fq->is_vunlocked)) {
 		/* Move the next request into the FQ and update heaps as needed.
-		   Skip this step we already did this during the virtual unlock. */
+		   Skip this step we if already did this during the virtual unlock. */
 		r2dglp_move_next_to_fq(sem, fq, t, &fq->donee_heap_node, &flags,
 						ALLOW_STEALING, !ALWAYS_TERMINATE_DONATION);
 	}
@@ -1576,14 +1595,16 @@ void r2dglp_abort_request(struct r2dglp_semaphore *sem, struct task_struct *t,
 	switch(wait->cur_q)
 	{
 		case R2DGLP_PQ:
+			TRACE_TASK(t, "Aborting request while on PQ.\n");
 			/* No one inherits from waiters in PQ. Just drop the request. */
 			__drop_from_pq(sem, wait);
 			break;
 
 
 		case R2DGLP_FQ:
+			TRACE_TASK(t, "Aborting request while on FQ.\n");
 			r2dglp_del_global_list(sem, t, &wait->global_heap_node);
-			binheap_delete(&wait->donee_heap_node.node, &sem->donees);
+			sbinheap_delete(&wait->donee_heap_node.snode, &sem->donees);
 
 			/* remove the task from the FQ */
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
@@ -1598,12 +1619,12 @@ void r2dglp_abort_request(struct r2dglp_semaphore *sem, struct task_struct *t,
 				int count = 0;
 				TRACE_TASK(t, "discarding inheritance because R2DGLP "
 							  "is outermost\n");
-
-				while(!binheap_empty(&tsk_rt(t)->hp_blocked_tasks)) {
+				while (!binheap_empty(&tsk_rt(t)->hp_blocked_tasks)) {
 					binheap_delete_root(&tsk_rt(t)->hp_blocked_tasks,
-									struct nested_info, hp_binheap_node);
+						struct nested_info, hp_binheap_node);
 					++count;
 				}
+
 				if (count)
 					litmus->decrease_prio(t, NULL, 0);
 			}
@@ -1620,13 +1641,14 @@ void r2dglp_abort_request(struct r2dglp_semaphore *sem, struct task_struct *t,
 
 
 		case R2DGLP_DONOR:
+			TRACE_TASK(t, "Aborting request while donor.\n");
 			r2dglp_del_global_list(sem, t, &wait->global_heap_node);
 			__drop_from_donor(sem, wait);
 
 			/* update donee */
 			donee_info = wait->donee_info;
 			donee_info->donor_info = NULL;  // clear the cross-link
-			binheap_decrease(&donee_info->node, &sem->donees);
+			sbinheap_decrease(&donee_info->snode, &sem->donees);
 
 			donee = donee_info->task;
 			donee_fq = donee_info->fq;
@@ -1635,8 +1657,9 @@ void r2dglp_abort_request(struct r2dglp_semaphore *sem, struct task_struct *t,
 						   donee->comm, donee->pid,
 						   r2dglp_get_idx(sem, donee_fq));
                 /* unlocks sem->lock. reacquire it. */
-				r2dglp_remove_donation_from_owner(&wait->prio_donation.hp_binheap_node,
-								donee_fq, sem, flags);
+				r2dglp_remove_donation_from_owner(
+					&wait->prio_donation.hp_binheap_node,
+					donee_fq, sem, flags);
                 /* there should be no contention!!!! */
 				lock_fine_irqsave(&sem->lock, flags);
 			}
@@ -1646,7 +1669,8 @@ void r2dglp_abort_request(struct r2dglp_semaphore *sem, struct task_struct *t,
 						   r2dglp_get_idx(sem, donee_fq));
 
 				r2dglp_remove_donation_from_fq_waiter(donee,
-								&wait->prio_donation.hp_binheap_node);
+					&wait->prio_donation.hp_binheap_node);
+
 				if(donee == donee_fq->hp_waiter) {
 					TRACE_TASK(t, "Donee %s/%d was an hp_waiter of fq %d. "
 							   "Rechecking hp_waiter.\n",
@@ -1705,6 +1729,11 @@ void r2dglp_budget_exhausted(struct litmus_lock* l, struct task_struct* t)
 						l->ident);
 
 		wait = (r2dglp_wait_state_t*)tsk_rt(t)->blocked_lock_data;
+
+		/* re-init the wait state just to be safe */
+		memset(wait, 0, sizeof(*wait));
+		wait->task = t;
+
 		if(sem->nr_in_fifos < sem->max_in_fifos) {
 
 			struct fifo_queue *fq;
@@ -1764,7 +1793,7 @@ void r2dglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t)
 	struct fifo_queue *fq = r2dglp_get_queue(sem, t);
 	unsigned long flags = 0, more_flags;
 
-	TRACE_TASK(t, "virtual unlock!\n");
+	TRACE_TASK(t, "performing virtual unlock\n");
 
 	if (!fq)
 		return;
@@ -1782,6 +1811,23 @@ void r2dglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t)
 		goto out;
 	}
 
+	/* 't' exits priority-tracking data structures, making it
+	   "invisible" to all priority inheritance mechanisms except
+	   for FQ-based inheritance. 't' can still transitively
+	   inherit priority from a donor. */
+	r2dglp_del_global_list(sem, t, &fq->global_heap_node);
+
+#ifdef CONFIG_SCHED_DEBUG_TRACE
+	if(fq->donee_heap_node.donor_info &&
+	   fq->donee_heap_node.donor_info->task) {
+		TRACE_TASK(t, "has a donor while vunlock: %s/%d\n",
+			fq->donee_heap_node.donor_info->task->comm,
+			fq->donee_heap_node.donor_info->task->pid);
+	}
+#endif
+
+	sbinheap_delete(&fq->donee_heap_node.snode, &sem->donees);
+
 	/* Move a request from donor heap or PQ to fq. don't steal from
 	 * other FQs.  Also, terminate donation relationship if we move
 	 * a donor to 't' to the FQ (we'll pick inheritance back up via
@@ -1793,6 +1839,8 @@ void r2dglp_virtual_unlock(struct litmus_lock* l, struct task_struct* t)
 	 * length counts remain unchanged. */
 	--(sem->nr_in_fifos);
 	fq->is_vunlocked = 1;
+
+	TRACE_TASK(t, "virtual unlock completed\n");
 
 out:
 	unlock_fine_irqrestore(&sem->lock, flags);
@@ -1831,6 +1879,9 @@ void r2dglp_free(struct litmus_lock* l)
 {
 	struct r2dglp_semaphore *sem = r2dglp_from_lock(l);
 
+	kfree(sem->donors.buf);
+	kfree(sem->donees.buf);
+	kfree(sem->top_m.buf);
 	kfree(sem->fifo_queues);
 	kfree(sem);
 }
@@ -1919,12 +1970,12 @@ struct litmus_lock* r2dglp_new(unsigned int m,
 		q->is_vunlocked = 0;
 
 		q->global_heap_node.task = NULL;
-		INIT_BINHEAP_NODE(&q->global_heap_node.node);
+		INIT_BINHEAP_NODE(&q->global_heap_node.dnode);
 
 		q->donee_heap_node.task = NULL;
 		q->donee_heap_node.donor_info = NULL;
 		q->donee_heap_node.fq = NULL;
-		INIT_BINHEAP_NODE(&q->donee_heap_node.node);
+		INIT_SBINHEAP_NODE(&q->donee_heap_node.snode);
 
 		q->nest.lock = (struct litmus_lock*)sem;
 		q->nest.hp_waiter_eff_prio = NULL;
@@ -1934,15 +1985,57 @@ struct litmus_lock* r2dglp_new(unsigned int m,
 
 	sem->shortest_fifo_queue = &sem->fifo_queues[0];
 
-	sem->top_m_size = 0;
-
 	// init heaps
-	INIT_BINHEAP_HANDLE(&sem->top_m, r2dglp_min_heap_base_priority_order);
+
+	/* heaps of bounded sizes */
+
+	/* bounded by cluster size */
+	sem->top_m.compare = r2dglp_min_heap_base_priority_order;
+	sem->top_m.max_size = m;
+	sem->top_m.buf = kmalloc(m * sizeof(struct sbinheap_node),
+		GFP_KERNEL);
+	if(!sem->top_m.buf)
+	{
+		kfree(sem->fifo_queues);
+		kfree(sem);
+		return NULL;
+	}
+	INIT_SBINHEAP(&sem->top_m);
+
+	/* bounded by num FQ slots  */
+	sem->donees.compare = r2dglp_min_heap_donee_order;
+	sem->donees.max_size = sem->max_in_fifos;
+	sem->donees.buf = kmalloc(
+		sem->max_in_fifos * sizeof(struct sbinheap_node),
+		GFP_KERNEL);
+	if(!sem->donees.buf)
+	{
+		kfree(sem->top_m.buf);
+		kfree(sem->fifo_queues);
+		kfree(sem);
+		return NULL;
+	}
+	INIT_SBINHEAP(&sem->donees);
+
+	/* bounded by cluster size */
+	sem->donors.compare = r2dglp_donor_max_heap_base_priority_order;
+	sem->donors.max_size = m; /* bounded by cluster size */
+	sem->donors.buf = kmalloc(m * sizeof(struct sbinheap_node),
+		GFP_KERNEL);
+	if(!sem->donors.buf)
+	{
+		kfree(sem->donees.buf);
+		kfree(sem->top_m.buf);
+		kfree(sem->fifo_queues);
+		kfree(sem);
+		return NULL;
+	}
+	INIT_SBINHEAP(&sem->donors);
+
+	/* heaps of unbounded size */
 	INIT_BINHEAP_HANDLE(&sem->not_top_m, r2dglp_max_heap_base_priority_order);
-	INIT_BINHEAP_HANDLE(&sem->donees, r2dglp_min_heap_donee_order);
 	INIT_BINHEAP_HANDLE(&sem->priority_queue,
 					r2dglp_max_heap_base_priority_order);
-	INIT_BINHEAP_HANDLE(&sem->donors, r2dglp_donor_max_heap_base_priority_order);
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 	sem->aff_obs = NULL;
@@ -2508,9 +2601,9 @@ r2dglp_donee_heap_node_t* gpu_r2dglp_advise_donee_selection(
 	if(tsk_rt(donor)->last_gpu < 0) {
 		/* no affinity.  just return the min prio, like standard R2DGLP */
 		/* TODO: Find something closer to the head of the queue?? */
-		donee_node = binheap_top_entry(&sem->donees,
-									   r2dglp_donee_heap_node_t,
-									   node);
+		donee_node = sbinheap_top_entry(&sem->donees,
+			r2dglp_donee_heap_node_t,
+			snode);
 		goto out;
 	}
 
@@ -2519,11 +2612,11 @@ r2dglp_donee_heap_node_t* gpu_r2dglp_advise_donee_selection(
 	// prio task in the FIFO queues) to make it eligible for selection below.
 	//
 	// NOTE: The original donor relation *must* be restored, even if we select
-	// the default donee throug affinity-aware selection, before returning
+	// the default donee through affinity-aware selection, before returning
 	// from this function so we don't screw up our heap ordering.
 	// The standard R2DGLP algorithm will steal the donor relationship if needed.
 	default_donee =
-			binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
+		sbinheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, snode);
 
 	default_donee_donor_info = default_donee->donor_info;  // back-up donor relation
 	default_donee->donor_info = NULL;  // temporarily break any donor relation.
@@ -2609,41 +2702,39 @@ out:
 }
 
 
-
-static void __find_closest_donor(int target_gpu,
-				struct binheap_node* donor_node,
-				r2dglp_wait_state_t** cur_closest,
-				int* cur_dist)
+typedef struct
 {
+	int gpu;
+	r2dglp_wait_state_t* closest;
+	int dist;
+} find_closest_donor_args_t;
+
+static void __find_closest_donor(sbinheap_node_t donor_node, void *_args)
+{
+	find_closest_donor_args_t* args = (find_closest_donor_args_t*)_args;
+
 	r2dglp_wait_state_t *this_donor =
-		binheap_entry(donor_node, r2dglp_wait_state_t, node);
+		sbinheap_entry(donor_node, r2dglp_wait_state_t, snode);
 
 	int this_dist =
-		gpu_migration_distance(target_gpu, tsk_rt(this_donor->task)->last_gpu);
+		gpu_migration_distance(args->gpu,
+			tsk_rt(this_donor->task)->last_gpu);
 
-	if(this_dist < *cur_dist) {
+	if(this_dist < args->dist) {
 		// take this donor
-		*cur_dist = this_dist;
-		*cur_closest = this_donor;
+		args->dist = this_dist;
+		args->closest = this_donor;
 	}
-	else if(this_dist == *cur_dist) {
+	else if(this_dist == args->dist) {
 		// priority tie-break.  Even though this is a pre-order traversal,
 		// this is a heap, not a binary tree, so we still need to do a priority
 		// comparision.
-		if(!(*cur_closest) ||
-		   litmus->compare(this_donor->task, (*cur_closest)->task)) {
-			*cur_dist = this_dist;
-			*cur_closest = this_donor;
+		if(!(args->closest) ||
+		   litmus->compare(this_donor->task, (args->closest)->task)) {
+			args->dist = this_dist;
+			args->closest = this_donor;
 		}
 	}
-
-    if(donor_node->left)
-		__find_closest_donor(target_gpu, donor_node->left,
-						cur_closest, cur_dist);
-
-    if(donor_node->right)
-		__find_closest_donor(target_gpu, donor_node->right,
-						cur_closest, cur_dist);
 }
 
 r2dglp_wait_state_t* gpu_r2dglp_advise_donor_to_fq(struct r2dglp_affinity* aff,
@@ -2651,29 +2742,31 @@ r2dglp_wait_state_t* gpu_r2dglp_advise_donor_to_fq(struct r2dglp_affinity* aff,
 {
 	// Huristic strategy: Find donor with the closest affinity to fq.
 	// Tie-break on priority.
+	// We need to iterate over all the donors to do this.
 
-	// We need to iterate over all the donors to do this.  Unfortunatly,
-	// our donors are organized in a heap.  We'll visit each node with a
-	// recurisve call.  This is realitively safe since there are only sem->m
-	// donors, at most.  We won't recurse too deeply to have to worry about
-	// our stack.  (even with 128 CPUs, our nest depth is at most 7 deep).
-
+	r2dglp_wait_state_t *donor;
 	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
-	r2dglp_wait_state_t *donor = NULL;
-	int distance = MIG_NONE;
-	int gpu = replica_to_gpu(aff, r2dglp_get_idx(sem, fq));
+	find_closest_donor_args_t args =
+	{
+		.gpu = replica_to_gpu(aff, r2dglp_get_idx(sem, fq)),
+		.closest = NULL,
+		.dist = MIG_NONE,
+	};
 
 #ifdef CONFIG_SCHED_DEBUG_TRACE
 	r2dglp_wait_state_t* default_donor =
-			binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
+		sbinheap_top_entry(&sem->donors, r2dglp_wait_state_t, snode);
 #endif
 
-	__find_closest_donor(gpu, sem->donors.root, &donor, &distance);
+	sbinheap_for_each(&sem->donors, __find_closest_donor, &args);
+	donor = args.closest;
+
+	BUG_ON(!donor);
 
 	TRACE_CUR("Selected donor %s/%d (distance = %d) to move to fq %d "
 			  "(non-aff wanted %s/%d). differs = %d\n",
 			  donor->task->comm, donor->task->pid,
-			  distance,
+			  args.dist,
 			  r2dglp_get_idx(sem, fq),
 			  default_donor->task->comm, default_donor->task->pid,
 			  (donor->task != default_donor->task)
@@ -2936,7 +3029,7 @@ r2dglp_donee_heap_node_t* simple_gpu_r2dglp_advise_donee_selection(
 {
 	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
 	r2dglp_donee_heap_node_t *donee =
-			binheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, node);
+		sbinheap_top_entry(&sem->donees, r2dglp_donee_heap_node_t, snode);
 	return(donee);
 }
 
@@ -2945,7 +3038,7 @@ r2dglp_wait_state_t* simple_gpu_r2dglp_advise_donor_to_fq(
 {
 	struct r2dglp_semaphore *sem = r2dglp_from_lock(aff->obs.lock);
 	r2dglp_wait_state_t* donor =
-			binheap_top_entry(&sem->donors, r2dglp_wait_state_t, node);
+		sbinheap_top_entry(&sem->donors, r2dglp_wait_state_t, snode);
 	return(donor);
 }
 
@@ -3336,7 +3429,7 @@ static int r2dglp_proc_print(char *page, char **start, off_t off, int count, int
 	}
 	else {
 		w = scnprintf(next, size, "donors:\n"); size -= w; next += w;
-		binheap_for_each(&sem->donors, __r2dglp_donor_to_proc, &heap_args);
+		sbinheap_for_each(&sem->donors, __r2dglp_donor_to_proc, &heap_args);
 	}
 
 	raw_spin_unlock_irqrestore(&sem->real_lock, flags);

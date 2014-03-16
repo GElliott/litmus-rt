@@ -132,7 +132,7 @@ inline static void __simple_on_unscheduled(struct task_struct* t)
 {
 	BUG_ON(!t);
 
-	if (budget_precisely_tracked(t))
+	if (is_realtime(t) && budget_precisely_tracked(t))
 		cancel_enforcement_timer(t);
 }
 

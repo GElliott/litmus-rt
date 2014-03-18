@@ -150,6 +150,12 @@ static inline int sbinheap_empty(struct sbinheap *heap)
 	return(heap->size == 0);
 }
 
+/* Returns true if the sbinheap is full. */
+static inline int sbinheap_full(struct sbinheap *heap)
+{
+	return(heap->size == heap->max_size);
+}
+
 /* Get the maximum size of the heap */
 static inline idx_t sbinheap_max_size(struct sbinheap *heap)
 {

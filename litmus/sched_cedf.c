@@ -258,43 +258,52 @@ static void cedf_untrack_in_top_m(struct task_struct *t)
 {
 	/* cluster lock must be held */
 	cedf_domain_t *cluster = task_cpu_cluster(t);
+	int exited_top_m = 0;
 
-	if (!sbinheap_is_in_heap(&tsk_rt(t)->budget.top_m_node) &&
-		!binheap_is_in_heap(&tsk_rt(t)->budget.not_top_m_node))
-		return;
+	BUG_ON(sbinheap_is_in_heap(&tsk_rt(t)->budget.top_m_node) &&
+	       binheap_is_in_heap(&tsk_rt(t)->budget.not_top_m_node));
 
-	if (bt_flag_is_set(t, BTF_IS_TOP_M)) {
-		/* delete t's entry */
+	if (sbinheap_is_in_heap(&tsk_rt(t)->budget.top_m_node)) {
+		exited_top_m = bt_flag_is_set(t, BTF_IS_TOP_M);
+		WARN_ON_ONCE(!exited_top_m);
+
 		sbinheap_delete(&tsk_rt(t)->budget.top_m_node, &cluster->top_m);
 		INIT_SBINHEAP_NODE(&tsk_rt(t)->budget.top_m_node);
-		budget_state_machine(t,on_exit_top_m);
-		bt_flag_clear(t, BTF_IS_TOP_M);
 
-		/* move a task over from the overflow heap */
-		if(!binheap_empty(&cluster->not_top_m)) {
-			struct budget_tracker *bt =
-				binheap_top_entry(&cluster->not_top_m, struct budget_tracker,
-					not_top_m_node);
-			struct task_struct *to_move =
-				container_of(
-					 container_of(bt, struct rt_param, budget),
-						 struct task_struct,
-						 rt_param);
-
-			binheap_delete_root(&cluster->not_top_m, struct budget_tracker,
-						not_top_m_node);
-			INIT_BINHEAP_NODE(&tsk_rt(to_move)->budget.not_top_m_node);
-
-			sbinheap_add(&tsk_rt(to_move)->budget.top_m_node,
-						&cluster->top_m,
-						struct budget_tracker, top_m_node);
-			bt_flag_set(to_move, BTF_IS_TOP_M);
-			budget_state_machine(to_move,on_enter_top_m);
+		if (likely(exited_top_m)) {
+			budget_state_machine(t,on_exit_top_m);
+			bt_flag_clear(t, BTF_IS_TOP_M);
 		}
 	}
-	else {
+	else if(likely(binheap_is_in_heap(&tsk_rt(t)->budget.not_top_m_node))) {
 		binheap_delete(&tsk_rt(t)->budget.not_top_m_node, &cluster->not_top_m);
 		INIT_BINHEAP_NODE(&tsk_rt(t)->budget.not_top_m_node);
+	}
+
+	/* move a task over from the overflow heap */
+	if(!sbinheap_full(&cluster->top_m) &&
+	   !binheap_empty(&cluster->not_top_m)) {
+		struct budget_tracker *bt =
+			binheap_top_entry(&cluster->not_top_m, struct budget_tracker,
+				not_top_m_node);
+		struct task_struct *to_move =
+			container_of(
+				 container_of(bt, struct rt_param, budget),
+					 struct task_struct,
+					 rt_param);
+
+		/* task should have already been moved into the top m */
+		WARN_ON_ONCE(!exited_top_m);
+
+		binheap_delete_root(&cluster->not_top_m, struct budget_tracker,
+					not_top_m_node);
+		INIT_BINHEAP_NODE(&tsk_rt(to_move)->budget.not_top_m_node);
+
+		sbinheap_add(&tsk_rt(to_move)->budget.top_m_node,
+					&cluster->top_m,
+					struct budget_tracker, top_m_node);
+		bt_flag_set(to_move, BTF_IS_TOP_M);
+		budget_state_machine(to_move,on_enter_top_m);
 	}
 }
 

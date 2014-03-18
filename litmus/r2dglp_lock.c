@@ -917,12 +917,13 @@ static void r2dglp_move_donor_to_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
 				r2dglp_wait_state_t *donor_info)
 {
+#ifdef CONFIG_SCHED_DEBUG_TRACE
 	struct task_struct *t = donor_info->task;
-
 	TRACE_CUR("Donor %s/%d being moved to fq %d\n",
 			  t->comm,
 			  t->pid,
 			  r2dglp_get_idx(sem, fq));
+#endif
 
 	__drop_from_donor(sem, donor_info);
 
@@ -949,12 +950,13 @@ static void r2dglp_move_pq_to_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
 				r2dglp_wait_state_t *wait)
 {
+#ifdef CONFIG_SCHED_DEBUG_TRACE
 	struct task_struct *t = wait->task;
-
 	TRACE_CUR("PQ request %s/%d being moved to fq %d\n",
 			  t->comm,
 			  t->pid,
 			  r2dglp_get_idx(sem, fq));
+#endif
 
 	__drop_from_pq(sem, wait);
 	__r2dglp_enqueue_on_fq(sem, fq, wait,

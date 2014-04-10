@@ -65,7 +65,11 @@ typedef enum {
     /* Jobs are released immediately after meeting precedence
        constraints. Beware this can peg your CPUs if used in
        the wrong applications. Only supported by EDF schedulers. */
-	TASK_EARLY
+	TASK_EARLY,
+
+	/* Special policy used by interrupt handling threads and aux tasks.
+	   Effectivly a TASK_EARLY/TASK_SPORADIC hybrid policy. */
+	TASK_DAEMON,
 } release_policy_t;
 
 /* Real-time behaviors of forked threads that are not explicitly real-time. */
@@ -336,6 +340,10 @@ struct rt_job {
 	 * due to budget enforcement behaviors.
 	 */
 	unsigned int	is_backlogged_job:1;
+
+	/* Flag that a new job should be released when the task is awoken.
+	   ONLY USED WITH TASK_DAEMON TASKS! */
+	unsigned int    new_release_on_wake:1;
 };
 
 struct pfair_param;
@@ -503,10 +511,10 @@ struct rt_param {
 
 #ifdef CONFIG_LITMUS_SOFTIRQD
 	/* proxy threads have minimum priority by default */
-	unsigned int	is_interrupt_thread:1;
+	unsigned int	is_interrupt_task:1;
 
 	/* pointer to data used by klmirqd thread.
-	   valid only if ptr only valid if is_interrupt_thread == 1 */
+	   valid only if ptr only valid if is_interrupt_task == 1 */
 	struct klmirqd_info* klmirqd_info;
 #endif /* end LITMUS_SOFTIRQD */
 

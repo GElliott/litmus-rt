@@ -488,17 +488,46 @@ void nv_tasklet_hi_schedule_first(struct tasklet_struct *t)
 }
 EXPORT_SYMBOL(nv_tasklet_hi_schedule_first);
 
+inline u32 remap_nv_device_num(u32 device)
+{
+#ifdef CONFIG_NV_DRV_331_44
+	/* Userspace and kernel enumerate GPUs in reversed orders on
+	   each NUMA node. GPUSync currently has the 'userspace' view
+	   of the world, so we need to remap.
+	   Example:
+		   User 0 -> OS 3
+		   User 1 -> OS 2
+		   User 2 -> OS 1
+		   User 3 -> OS 0
+
+	   TODO: DO THIS REMAPPING AT THE USER LEVEL!
+	 */
+	/* remap hack for specific bonham platform. */
+		        /* 0, 1, 2, 3, 4, 5, 6, 7 */
+	u32 remap[] = {3, 2, 1, 0, 7, 6, 5, 4};
+	BUG_ON(device > sizeof(remap)/sizeof(remap[0]));
+	device = remap[device];
+#endif
+	return device;
+}
+
+
 u32 get_tasklet_nv_device_num(const struct tasklet_struct *t)
 {
 	/* TODO: use hard-coded offsets instead of including structures
 	   derived from NVIDIA's GPL layer data structures */
+	u32 device;
 	litmus_nv_state_t* nvstate = (litmus_nv_state_t*)(t->data);
 	litmus_nv_linux_state_t* linuxstate =
 			container_of(nvstate, litmus_nv_linux_state_t, nv_state);
 
-	BUG_ON(linuxstate->device_num >= NV_DEVICE_NUM);
+	device = linuxstate->device_num;
 
-	return(linuxstate->device_num);
+	BUG_ON(device >= NV_DEVICE_NUM);
+
+	device = remap_nv_device_num(device);
+
+	return device;
 }
 
 u32 get_work_nv_device_num(const struct work_struct *t)
@@ -508,8 +537,13 @@ u32 get_work_nv_device_num(const struct work_struct *t)
 	void** device_num_ptr = state + DEVICE_NUM_OFFSET;
 
 	/* pray NVIDIA will aways set "data" to device ID pointer */
-	u32 device_num = *((u32*)(*device_num_ptr));
-	return(device_num);
+	u32 device = *((u32*)(*device_num_ptr));
+
+	BUG_ON(device >= NV_DEVICE_NUM);
+
+	device = remap_nv_device_num(device);
+
+	return(device);
 }
 
 

@@ -85,8 +85,8 @@ void kill_klmirqd(void)
 
 		raw_spin_lock_irqsave(&klmirqd_state.lock, flags);
 
-		TRACE("%s: Killing all klmirqd threads! (%d of them)\n",
-						__FUNCTION__, klmirqd_state.nr_threads);
+		TRACE("Killing all klmirqd threads! (%d of them)\n",
+			klmirqd_state.nr_threads);
 
 		klmirqd_state.shuttingdown = 1;
 
@@ -123,14 +123,14 @@ void kill_klmirqd_thread(struct task_struct* klmirqd_thread)
 	unsigned long flags;
 	struct klmirqd_info* info;
 
-	if (!tsk_rt(klmirqd_thread)->is_interrupt_thread) {
+	if (!tsk_rt(klmirqd_thread)->is_interrupt_task) {
 		TRACE("%s/%d is not a klmirqd thread\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+			klmirqd_thread->comm, klmirqd_thread->pid);
 		return;
 	}
 
-	TRACE("%s: Killing klmirqd thread %s/%d\n",
-					__FUNCTION__, klmirqd_thread->comm, klmirqd_thread->pid);
+	TRACE("Killing klmirqd thread %s/%d\n",
+		klmirqd_thread->comm, klmirqd_thread->pid);
 
 	raw_spin_lock_irqsave(&klmirqd_state.lock, flags);
 
@@ -180,7 +180,7 @@ static void __launch_klmirqd_thread(struct work_struct *work)
 		if (launch_data->name[0] == '\0') {
 			id = atomic_inc_return(&klmirqd_id_gen);
 			TRACE("Launching klmirqd_th%d/%d\n",
-							id, launch_data->cpu_affinity);
+				id, launch_data->cpu_affinity);
 
 			thread = kthread_create(
 						run_klmirqd,
@@ -285,11 +285,11 @@ static int become_litmus_daemon(struct task_struct* tsk)
 		.cpu = task_cpu(current),
 		.priority = LITMUS_LOWEST_PRIORITY,
 		.cls = RT_CLASS_BEST_EFFORT,
+		/* klmirdq monitors its budget, so no enforcement needed */
 		.budget_policy = NO_ENFORCEMENT,
 		.drain_policy = DRAIN_SIMPLE,
 		.budget_signal_policy = NO_SIGNALS,
-		/* use SPORADIC instead of EARLY since util = 1.0 */
-		.release_policy = TASK_SPORADIC,
+		.release_policy = TASK_DAEMON,
 	};
 
 	struct sched_param param = { .sched_priority = 0};
@@ -298,7 +298,7 @@ static int become_litmus_daemon(struct task_struct* tsk)
 
 	/* set task params */
 	tsk_rt(tsk)->task_params = tp;
-	tsk_rt(tsk)->is_interrupt_thread = 1;
+	tsk_rt(tsk)->is_interrupt_task = 1;
 
 	/* inform the OS we're SCHED_LITMUS --
 	 sched_setscheduler_nocheck() calls litmus_admit_task(). */
@@ -324,7 +324,7 @@ static int register_klmirqd(struct task_struct* tsk)
 	unsigned long flags;
 	struct klmirqd_info *info = NULL;
 
-	if (!tsk_rt(tsk)->is_interrupt_thread) {
+	if (!tsk_rt(tsk)->is_interrupt_task) {
 		TRACE("Only proxy threads already running in Litmus "
 			  "may become klmirqd threads!\n");
 		WARN_ON(1);
@@ -382,7 +382,7 @@ static int unregister_klmirqd(struct task_struct* tsk)
 
 	TRACE_CUR("unregistering.\n");
 
-	if (!tsk_rt(tsk)->is_interrupt_thread || !info) {
+	if (!tsk_rt(tsk)->is_interrupt_task || !info) {
 		WARN_ON(1);
 		retval = -1;
 		goto out;
@@ -505,7 +505,7 @@ static void wakeup_litirqd_locked(struct klmirqd_info* which)
 	/* Interrupts are disabled: no need to stop preemption */
 	if (which && which->klmirqd) {
 		if(which->klmirqd->state != TASK_RUNNING) {
-			TRACE("%s: Waking up klmirqd: %s/%d\n", __FUNCTION__,
+			TRACE("Waking up klmirqd: %s/%d\n",
 				which->klmirqd->comm, which->klmirqd->pid);
 
 			wake_up_process(which->klmirqd);
@@ -550,7 +550,7 @@ static void do_lit_tasklet(struct klmirqd_info* which,
 			if (!atomic_read(&t->count)) {
 				if(!test_and_clear_bit(TASKLET_STATE_SCHED, &t->state))
 					BUG();
-				TRACE_CUR("%s: Invoking tasklet.\n", __FUNCTION__);
+				TRACE_CUR("Invoking tasklet.\n");
 
 				sched_trace_tasklet_begin(effective_priority(current));
 				t->func(t->data);
@@ -564,7 +564,7 @@ static void do_lit_tasklet(struct klmirqd_info* which,
 			tasklet_unlock(t);
 		}
 
-		TRACE_CUR("%s: Could not invoke tasklet. Requeuing.\n", __FUNCTION__);
+		TRACE_CUR("Could not invoke tasklet. Requeuing.\n");
 
 		/* couldn't process tasklet.  put it back at the end of the queue. */
 		if(pending_tasklets == &which->pending_tasklets)
@@ -582,22 +582,22 @@ static void do_litirq(struct klmirqd_info* which)
 	u32 pending;
 
 	if(in_interrupt()) {
-		TRACE("%s: exiting early: in interrupt context!\n", __FUNCTION__);
+		TRACE("exiting early: in interrupt context!\n");
 		return;
 	}
 
 	if(which->klmirqd != current) {
-		TRACE_CUR("%s: exiting early: thread/info mismatch! "
+		TRACE_CUR("exiting early: thread/info mismatch! "
 				"Running %s/%d but given %s/%d.\n",
-				__FUNCTION__, current->comm, current->pid,
+				current->comm, current->pid,
 				which->klmirqd->comm, which->klmirqd->pid);
 		return;
 	}
 
 	if(!is_realtime(current)) {
-		TRACE_CUR("%s: exiting early: klmirqd is not real-time. "
+		TRACE_CUR("exiting early: klmirqd is not real-time. "
 				"Sched Policy = %d\n",
-				__FUNCTION__, current->policy);
+				current->policy);
 		return;
 	}
 
@@ -607,12 +607,12 @@ static void do_litirq(struct klmirqd_info* which)
 	if(pending) {
 		/* extract the work to do and do it! */
 		if(pending & LIT_TASKLET_HI) {
-			TRACE_CUR("%s: Invoking HI tasklets.\n", __FUNCTION__);
+			TRACE_CUR("Invoking HI tasklets.\n");
 			do_lit_tasklet(which, &which->pending_tasklets_hi);
 		}
 
 		if(pending & LIT_TASKLET_LOW) {
-			TRACE_CUR("%s: Invoking LOW tasklets.\n", __FUNCTION__);
+			TRACE_CUR("Invoking LOW tasklets.\n");
 			do_lit_tasklet(which, &which->pending_tasklets);
 		}
 	}
@@ -643,7 +643,7 @@ static void do_work(struct klmirqd_info* which)
 	raw_spin_unlock_irqrestore(&which->lock, flags);
 
 
-	TRACE_CUR("%s: Invoking work object.\n", __FUNCTION__);
+	TRACE_CUR("Invoking work object.\n");
 
 	/* do the work! */
 	work_clear_pending(work);
@@ -670,21 +670,21 @@ static int run_klmirqd(void* callback)
 
 	retval = become_litmus_daemon(current);
 	if (retval != 0) {
-		TRACE_CUR("%s: Failed to transition to rt-task.\n", __FUNCTION__);
+		TRACE_CUR("Failed to transition to rt-task.\n");
 		goto failed;
 	}
 
 	retval = register_klmirqd(current);
 	if (retval != 0) {
-		TRACE_CUR("%s: Failed to become a klmirqd thread.\n", __FUNCTION__);
+		TRACE_CUR("Failed to become a klmirqd thread.\n");
 		goto failed_sched_normal;
 	}
 
 	if (cb && cb->func) {
 		retval = cb->func(cb->arg);
 		if (retval != 0) {
-			TRACE_CUR("%s: klmirqd callback reported failure. retval = %d\n",
-							__FUNCTION__, retval);
+			TRACE_CUR("klmirqd callback reported failure. retval = %d\n",
+				retval);
 			goto failed_unregister;
 		}
 	}
@@ -699,14 +699,17 @@ static int run_klmirqd(void* callback)
 		preempt_disable();
 		if (!litirq_pending(info)) {
 			/* sleep for work */
-			TRACE_CUR("%s: No more tasklets or work objects. "
-					"Going to sleep.\n", __FUNCTION__);
-			preempt_enable_no_resched();
-			schedule();
+			TRACE_CUR("No more tasklets or work objects. Going to sleep.\n");
+
+			set_new_job_on_wake(current);
+			{
+				preempt_enable_no_resched();
+				schedule();
+			}
+			clear_new_job_on_wake(current);
 
 			if(kthread_should_stop()) { /* bail out */
-				TRACE_CUR("%s:%d: Signaled to terminate.\n",
-								__FUNCTION__, __LINE__);
+				TRACE_CUR("Signaled to terminate.\n");
 				continue;
 			}
 
@@ -719,8 +722,7 @@ static int run_klmirqd(void* callback)
 			preempt_enable_no_resched();
 
 			if(kthread_should_stop()) {
-				TRACE_CUR("%s:%d: Signaled to terminate.\n",
-								__FUNCTION__, __LINE__);
+				TRACE_CUR("Signaled to terminate.\n");
 				break;
 			}
 
@@ -730,8 +732,7 @@ static int run_klmirqd(void* callback)
 			 * changed. Pending items may have been flushed while we were sleeping.
 			 */
 			if(litirq_pending(info)) {
-				TRACE_CUR("%s: Executing tasklets and/or work objects.\n",
-						  __FUNCTION__);
+				TRACE_CUR("Executing tasklets and/or work objects.\n");
 
 				do_litirq(info);
 
@@ -741,12 +742,19 @@ static int run_klmirqd(void* callback)
 				do_work(info);
 			}
 			else {
-				TRACE_CUR("%s: Pending work was flushed!\n", __FUNCTION__);
+				TRACE_CUR("Pending work was flushed!\n");
 
 				preempt_enable_no_resched();
 			}
 
-			cond_resched();
+			if(unlikely(budget_exhausted(current))) {
+				/* will resched */
+				TRACE_CUR("Exhausted budget. Completing job.\n");
+				litmus->complete_job();
+			}
+			else {
+				cond_resched();
+			}
 			preempt_disable();
 		}
 		preempt_enable();
@@ -764,7 +772,7 @@ failed_sched_normal:
 	become_normal_daemon(current);
 
 	if (exit) {
-		TRACE_TASK(current, "signalling exit\n");
+		TRACE_CUR("signalling exit\n");
 		complete(exit);
 	}
 
@@ -781,7 +789,7 @@ void flush_pending(struct task_struct* tsk)
 
 	struct klmirqd_info *which;
 
-	if (!tsk_rt(tsk)->is_interrupt_thread) {
+	if (!tsk_rt(tsk)->is_interrupt_task) {
 		TRACE("%s/%d is not a proxy thread\n", tsk->comm, tsk->pid);
 		WARN_ON(1);
 		return;
@@ -805,7 +813,7 @@ void flush_pending(struct task_struct* tsk)
 		which->pending_tasklets_hi.head = NULL;
 		which->pending_tasklets_hi.tail = &which->pending_tasklets_hi.head;
 
-		TRACE("%s: Handing HI tasklets back to Linux.\n", __FUNCTION__);
+		TRACE("Handing HI tasklets back to Linux.\n");
 
 		while(list) {
 			struct tasklet_struct *t = list;
@@ -820,7 +828,7 @@ void flush_pending(struct task_struct* tsk)
 				___tasklet_hi_schedule(t);
 			}
 			else {
-				TRACE("%s: dropped hi tasklet??\n", __FUNCTION__);
+				TRACE("dropped hi tasklet??\n");
 				BUG();
 			}
 		}
@@ -835,7 +843,7 @@ void flush_pending(struct task_struct* tsk)
 		which->pending_tasklets.head = NULL;
 		which->pending_tasklets.tail = &which->pending_tasklets.head;
 
-		TRACE("%s: Handing LOW tasklets back to Linux.\n", __FUNCTION__);
+		TRACE("Handing LOW tasklets back to Linux.\n");
 
 		while(list) {
 			struct tasklet_struct *t = list;
@@ -850,7 +858,7 @@ void flush_pending(struct task_struct* tsk)
 				___tasklet_schedule(t);
 			}
 			else {
-				TRACE("%s: dropped tasklet??\n", __FUNCTION__);
+				TRACE("dropped tasklet??\n");
 				BUG();
 			}
 		}
@@ -858,7 +866,7 @@ void flush_pending(struct task_struct* tsk)
 
 	/* flush work objects */
 	if(litirq_pending_work_irqoff(which)) {
-		TRACE("%s: Handing work objects back to Linux.\n", __FUNCTION__);
+		TRACE("Handing work objects back to Linux.\n");
 
 		which->pending &= ~LIT_WORK;
 		while(!list_empty(&which->worklist)) {
@@ -916,7 +924,7 @@ int __litmus_tasklet_schedule(struct tasklet_struct *t,
 	struct klmirqd_info* info;
 
 	if (unlikely(!is_realtime(klmirqd_thread) ||
-		!tsk_rt(klmirqd_thread)->is_interrupt_thread ||
+		!tsk_rt(klmirqd_thread)->is_interrupt_task ||
 		!tsk_rt(klmirqd_thread)->klmirqd_info)) {
 		TRACE("can't handle tasklets\n");
 		return ret;
@@ -929,8 +937,8 @@ int __litmus_tasklet_schedule(struct tasklet_struct *t,
 		___litmus_tasklet_schedule(t, info, 1);
 	}
 	else {
-		TRACE("%s: Tasklet rejected because %s/%d is terminating\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+		TRACE("Tasklet rejected because %s/%d is terminating\n",
+			klmirqd_thread->comm, klmirqd_thread->pid);
 	}
 	return(ret);
 }
@@ -972,10 +980,10 @@ int __litmus_tasklet_hi_schedule(struct tasklet_struct *t,
 	struct klmirqd_info* info;
 
 	if (unlikely(!is_realtime(klmirqd_thread) ||
-		!tsk_rt(klmirqd_thread)->is_interrupt_thread ||
+		!tsk_rt(klmirqd_thread)->is_interrupt_task ||
 		!tsk_rt(klmirqd_thread)->klmirqd_info)) {
-		TRACE("%s: %s/%d can't handle tasklets\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+		TRACE("%s/%d can't handle tasklets\n",
+			klmirqd_thread->comm, klmirqd_thread->pid);
 		return ret;
 	}
 
@@ -986,8 +994,8 @@ int __litmus_tasklet_hi_schedule(struct tasklet_struct *t,
 		___litmus_tasklet_hi_schedule(t, info, 1);
 	}
 	else {
-		TRACE("%s: Tasklet rejected because %s/%d is terminating\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+		TRACE("Tasklet rejected because %s/%d is terminating\n",
+			klmirqd_thread->comm, klmirqd_thread->pid);
 	}
 
 	return(ret);
@@ -1006,10 +1014,10 @@ int __litmus_tasklet_hi_schedule_first(struct tasklet_struct *t,
 	BUG_ON(!irqs_disabled());
 
 	if (unlikely(!is_realtime(klmirqd_thread) ||
-				 !tsk_rt(klmirqd_thread)->is_interrupt_thread ||
+				 !tsk_rt(klmirqd_thread)->is_interrupt_task ||
 				 !tsk_rt(klmirqd_thread)->klmirqd_info)) {
-		TRACE("%s: %s/%d can't handle tasklets\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+		TRACE("%s/%d can't handle tasklets\n",
+			klmirqd_thread->comm, klmirqd_thread->pid);
 		return ret;
 	}
 
@@ -1037,8 +1045,8 @@ int __litmus_tasklet_hi_schedule_first(struct tasklet_struct *t,
 		raw_spin_unlock(&info->lock);
 	}
 	else {
-		TRACE("%s: Tasklet rejected because %s/%d is terminating\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+		TRACE("Tasklet rejected because %s/%d is terminating\n",
+			klmirqd_thread->comm, klmirqd_thread->pid);
 	}
 
 	return(ret);
@@ -1079,10 +1087,10 @@ int __litmus_schedule_work(struct work_struct *w, struct task_struct* klmirqd_th
 	struct klmirqd_info* info;
 
 	if (unlikely(!is_realtime(klmirqd_thread) ||
-				 !tsk_rt(klmirqd_thread)->is_interrupt_thread ||
+				 !tsk_rt(klmirqd_thread)->is_interrupt_task ||
 				 !tsk_rt(klmirqd_thread)->klmirqd_info)) {
-		TRACE("%s: %s/%d can't handle work items\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+		TRACE("%s/%d can't handle work items\n",
+			klmirqd_thread->comm, klmirqd_thread->pid);
 		return ret;
 	}
 
@@ -1093,8 +1101,8 @@ int __litmus_schedule_work(struct work_struct *w, struct task_struct* klmirqd_th
 		___litmus_schedule_work(w, info, 1);
 	}
 	else {
-		TRACE("%s: Work rejected because %s/%d is terminating\n",
-						klmirqd_thread->comm, klmirqd_thread->pid);
+		TRACE("Work rejected because %s/%d is terminating\n",
+			klmirqd_thread->comm, klmirqd_thread->pid);
 		ret = 0;
 	}
 

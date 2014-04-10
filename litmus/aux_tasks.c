@@ -31,14 +31,13 @@ static int admit_aux_task(struct task_struct *t)
 		.period = AUX_SLICE_NS,
 		.relative_deadline = AUX_SLICE_NS,
 		.phase = 0,
-		.cpu = task_cpu(leader),  /* take CPU of group leader */
+		.cpu = (is_realtime(leader)) ? get_partition(leader) : task_cpu(leader),
 		.priority = LITMUS_LOWEST_PRIORITY,
 		.cls = RT_CLASS_BEST_EFFORT,
-		.budget_policy = QUANTUM_ENFORCEMENT,
+		.budget_policy = PRECISE_ENFORCEMENT,
 		.drain_policy = DRAIN_SIMPLE,
 		.budget_signal_policy = NO_SIGNALS,
-		/* use SPORADIC instead of EARLY since util = 1.0 */
-		.release_policy = TASK_SPORADIC,
+		.release_policy = TASK_DAEMON,
 	};
 
 	struct sched_param param = { .sched_priority = 0};

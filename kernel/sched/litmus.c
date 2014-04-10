@@ -250,6 +250,7 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		 * WARNING: this needs to be re-evaluated when porting
 		 *		  to newer kernel versions.
 		 */
+		// GPUSync: Task state change moved to plugins.
 //		p->state = TASK_RUNNING;
 		litmus->task_wake_up(p);
 

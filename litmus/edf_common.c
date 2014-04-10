@@ -71,11 +71,13 @@ int edf_higher_prio(const struct task_struct* first, const struct task_struct* s
 	/* Quick and dirty priority comparisons: exists? real-time? */
 
 	/* check for NULL tasks */
-	if (!first || !second)
+	if (!first || !second) {
 		return first && !second;
+	}
 	/* check for non-realtime */
-	if (!is_realtime(first) || !is_realtime(second))
+	if (!is_realtime(first) || !is_realtime(second)) {
 		return is_realtime(first) && !is_realtime(second);
+	}
 
 	/* Harder priority comparions... */
 
@@ -132,9 +134,9 @@ int edf_higher_prio(const struct task_struct* first, const struct task_struct* s
 
 #ifdef CONFIG_LITMUS_SOFTIRQD
 	{
-		int first_lo_klmirqd = tsk_rt(first)->is_interrupt_thread &&
+		int first_lo_klmirqd = tsk_rt(first)->is_interrupt_task &&
 				!tsk_rt(first)->inh_task;
-		int second_lo_klmirqd = tsk_rt(second)->is_interrupt_thread &&
+		int second_lo_klmirqd = tsk_rt(second)->is_interrupt_task &&
 				!tsk_rt(second)->inh_task;
 
 		/* prioritize aux tasks without inheritance below real-time tasks */
@@ -150,8 +152,8 @@ int edf_higher_prio(const struct task_struct* first, const struct task_struct* s
 			}
 		}
 
-		if (tsk_rt(first)->is_interrupt_thread &&
-			tsk_rt(second)->is_interrupt_thread &&
+		if (tsk_rt(first)->is_interrupt_task &&
+			tsk_rt(second)->is_interrupt_task &&
 			(tsk_rt(first)->inh_task == tsk_rt(second)->inh_task)) {
 			/* inh_task is !NULL for both tasks since neither was a lo_klmirqd
 			   task. Both klmirqd tasks inherit from the same task, so
@@ -207,8 +209,9 @@ aux_tie_break:
 klmirqd_tie_break:
 #endif
 
-	if (earlier_deadline(first_task, second_task))
+	if (earlier_deadline(first_task, second_task)) {
 		return 1;
+	}
 	else if (get_deadline(first_task) == get_deadline(second_task)) {
 		/* Backlog from budget exhaustion masks lateness.
 		   Tie-break on backlog first. */
@@ -219,8 +222,9 @@ klmirqd_tie_break:
 		second_bl_time = get_exec_cost(second_task)*get_backlog(second_task);
 
 		/* the one with the greatest backlog gets to run */
-		if (first_bl_time > second_bl_time)
+		if (first_bl_time > second_bl_time) {
 			return 1;
+		}
 		else if (first_bl_time == second_bl_time) {
 			/* Need to tie break. All methods must set pid_break to 0/1 if
 			 * first_task does not have priority over second_task.
@@ -233,8 +237,9 @@ klmirqd_tie_break:
 			 * especially in task sets where all tasks have the same
 			 * period and relative deadlines.
 			 */
-			if (get_lateness(first_task) > get_lateness(second_task))
+			if (get_lateness(first_task) > get_lateness(second_task)) {
 				return 1;
+			}
 			pid_break = (get_lateness(first_task) == get_lateness(second_task));
 
 #elif defined(CONFIG_EDF_TIE_BREAK_LATENESS_NORM)
@@ -251,8 +256,9 @@ klmirqd_tie_break:
 							get_rt_relative_deadline(first_task));
 			fp_t snorm = _frac(get_lateness(second_task),
 							get_rt_relative_deadline(second_task));
-			if (_gt(fnorm, snorm))
+			if (_gt(fnorm, snorm)) { /* TODO: Does this really return false if fnorm==snorm? */
 				return 1;
+			}
 			pid_break = _eq(fnorm, snorm);
 
 #elif defined(CONFIG_EDF_TIE_BREAK_HASH)
@@ -261,8 +267,9 @@ klmirqd_tie_break:
 			   second_task. */
 			long fhash = edf_hash(first_task);
 			long shash = edf_hash(second_task);
-			if (fhash < shash)
+			if (fhash < shash) {
 				return 1;
+			}
 			pid_break = (fhash == shash);
 #else
 			/* CONFIG_EDF_PID_TIE_BREAK */
@@ -278,12 +285,12 @@ klmirqd_tie_break:
 					/* there is inheritance going on. consider inheritors. */
 #ifdef CONFIG_LITMUS_SOFTIRQD
 					/* non-interrupt thread gets prio */
-					if (!tsk_rt(first)->is_interrupt_thread &&
-									tsk_rt(second)->is_interrupt_thread) {
+					if (!tsk_rt(first)->is_interrupt_task &&
+									tsk_rt(second)->is_interrupt_task) {
 						return 1;
 					}
-					else if (tsk_rt(first)->is_interrupt_thread ==
-									tsk_rt(second)->is_interrupt_thread) { /**/
+					else if (tsk_rt(first)->is_interrupt_task ==
+									tsk_rt(second)->is_interrupt_task) { /**/
 #endif
 
 #if defined(CONFIG_REALTIME_AUX_TASK_PRIORITY_INHERITANCE)
@@ -292,8 +299,8 @@ klmirqd_tie_break:
 									tsk_rt(second)->is_aux_task) {
 						return 1;
 					}
-					else if (tsk_rt(first_task)->is_aux_task ==
-									tsk_rt(second_task)->is_aux_task) { /**/
+					else if (tsk_rt(first)->is_aux_task ==
+									tsk_rt(second)->is_aux_task) { /**/
 #endif
 					/* if both tasks inherit from the same task */
 					if (tsk_rt(first)->inh_task == tsk_rt(second)->inh_task) {

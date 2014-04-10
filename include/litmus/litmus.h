@@ -125,10 +125,16 @@ inline static int budget_remaining(struct task_struct* t) {
 #define is_periodic(t)		(get_release_policy(t) == TASK_PERIODIC)
 #define is_sporadic(t)		(get_release_policy(t) == TASK_SPORADIC)
 #ifdef CONFIG_ALLOW_EARLY_RELEASE
-#define is_early_releasing(t)	(get_release_policy(t) == TASK_EARLY)
+#define is_early_releasing(t)	(get_release_policy(t) == TASK_EARLY || get_release_policy(t) == TASK_DAEMON)
 #else
 #define is_early_releasing(t)	(0)
 #endif
+
+/* macros used by daemon tasks */
+#define is_daemon(t)		(get_release_policy(t) == TASK_DAEMON)
+#define wants_new_job_on_wake(t) (tsk_rt(t)->job_params.new_release_on_wake == 1)
+#define set_new_job_on_wake(t) do { tsk_rt(t)->job_params.new_release_on_wake = 1; mb(); } while(0)
+#define clear_new_job_on_wake(t) do { tsk_rt(t)->job_params.new_release_on_wake = 0; mb(); } while(0)
 
 #define is_hrt(t)     		\
 	(tsk_rt(t)->task_params.cls == RT_CLASS_HARD)

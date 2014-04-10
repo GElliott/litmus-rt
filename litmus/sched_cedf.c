@@ -523,6 +523,8 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 	struct task_struct *task;
 	cpu_entry_t *last;
 
+	int loop_guard;
+
 #ifdef CONFIG_PREFER_LOCAL_LINKING
 	cpu_entry_t *local;
 
@@ -543,14 +545,39 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 	}
 #endif
 
-
-	for(last = lowest_prio_cpu(cluster);
+	for(last = lowest_prio_cpu(cluster), loop_guard = 0;
 	    edf_preemption_needed(&cluster->domain, last->linked);
-	    last = lowest_prio_cpu(cluster)) {
+	    last = lowest_prio_cpu(cluster), ++loop_guard) {
+
 		/* preemption necessary */
 		task = __take_ready(&cluster->domain);
-		TRACE("check_for_preemptions: attempting to link task %d to %d\n",
+		TRACE("attempting to link task %d to %d\n",
 		      task->pid, last->cpu);
+
+		/* we've looped too many times. start print dbg info on tasks */
+		if (loop_guard >= cluster_size)
+		{
+			TRACE_TASK(task, "!!!! abs_dead:%llu  is_aux:%d  is_isrh:%d  inherits:%d  backlog:%d\n",
+				get_deadline(task),
+				tsk_rt(task)->is_aux_task,
+				tsk_rt(task)->is_interrupt_task,
+				((tsk_rt(task)->inh_task != NULL) ? 1 : 0),
+				get_backlog(task)
+				);
+
+			if (tsk_rt(task)->inh_task != NULL)
+			{
+				struct task_struct* inh = tsk_rt(task)->inh_task;
+				TRACE_TASK(task, "!!!! INH: (%s/%d): dead:%llu is_aux:%d  is_isrh:%d  backlog:%d\n",
+					inh->comm, inh->pid,
+					get_deadline(inh),
+					tsk_rt(inh)->is_aux_task,
+					tsk_rt(inh)->is_interrupt_task,
+					get_backlog(inh)
+					);
+			}
+		}
+
 #ifdef CONFIG_SCHED_CPU_AFFINITY
 		{
 			cpu_entry_t *affinity =
@@ -624,7 +651,7 @@ static noinline void job_completion(struct task_struct *t, int forced)
 	/* DO BACKLOG TRACKING */
 
 	/* job completed with budget remaining */
-	if (get_release_policy(t) != TASK_SPORADIC) {
+	if (!is_sporadic(t) && !is_daemon(t)) {
 		/* only jobs we know that will call sleep_next_job()
 		   can use backlogging */
 		if (!forced) {
@@ -1289,9 +1316,11 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	if (exists) {
 		TRACE_TASK(prev,
 			   "blocks:%d out_of_time:%d np:%d completed:%d preempt:%d "
-			   "state:%d sig:%d\n",
+			   "state:%d sig:%d is_aux:%d is_intr:%d\n",
 			   blocks, out_of_time, np, sleep, preempt,
-			   prev->state, signal_pending(prev));
+			   prev->state, signal_pending(prev),
+			   tsk_rt(prev)->is_aux_task,
+			   tsk_rt(prev)->is_interrupt_task);
 	}
 	if (entry->linked && preempt)
 		TRACE_TASK(prev, "will be preempted by %s/%d\n",
@@ -1518,8 +1547,38 @@ static void cedf_task_wake_up(struct task_struct *t)
 
 	now = litmus_clock();
 	if (is_sporadic(t) && is_tardy(t, now)) {
+		/* release the next sporadic job */
 		release_at(t, now);
 		sched_trace_task_release(t);
+	}
+	else if (is_daemon(t)) {
+		if (is_tardy(t, now) && wants_new_job_on_wake(t)) {
+			/* clear the request for a new release */
+			TRACE_TASK(t, "releasing new job on wake.\n");
+			clear_new_job_on_wake(t);
+			release_at(t, now);
+			sched_trace_task_release(t);
+		}
+		else if (tsk_rt(t)->is_aux_task &&
+			(is_tardy(t, now) || budget_exhausted(t))) {
+
+			/* aux tasks can't tell us when they need new jobs
+			   with set_new_job_on_wake(), so we can only release
+			   new jobs the best we can. */
+			TRACE_TASK(t, "refreshing budget for aux task. tardy:%d exhausted:%d\n",
+				is_tardy(t, now),
+				budget_exhausted(t));
+
+			if (!is_tardy(t, now)) {
+				/* exhausted budget before deadline. just end this job */
+				prepare_for_next_period(t);
+			}
+			else {
+				/* we're passed the minimum separation time, so release a new job. */
+				release_at(t, now);
+			}
+			sched_trace_task_release(t);
+		}
 	}
 	else {
 		/* periodic task model.  don't force job to end. rely on user to say
@@ -1688,9 +1747,11 @@ static long cedf_admit_task(struct task_struct* tsk)
 	struct budget_tracker_ops* ops = NULL;
 
 	if (remote_cluster(task_cpu(tsk)) != task_cpu_cluster(tsk)) {
+		int want = task_cpu_cluster(tsk) - cedf;
+		int have = remote_cluster(task_cpu(tsk)) - cedf;
 		TRACE_TASK(tsk,
 			"WARNING: Incorrect cluster. In cluster %d wants cluster %d\n",
-			remote_cluster(task_cpu(tsk)), task_cpu_cluster(tsk));
+				want, have);
 	}
 
 	if (budget_enforced(tsk) || budget_signalled(tsk)) {

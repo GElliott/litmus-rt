@@ -36,20 +36,19 @@ struct klmirqd_registration
 	unsigned int shuttingdown:1;
 };
 
+static struct klmirqd_registration klmirqd_state =
+{
+	.lock = __RAW_SPIN_LOCK_INITIALIZER(klmirqd_state.lock),
+	.nr_threads = 0,
+	.threads = {&klmirqd_state.threads, &klmirqd_state.threads},
+	.initialized = 1,
+	.shuttingdown = 0,
+};
+
 static atomic_t klmirqd_id_gen = ATOMIC_INIT(-1);
-
-static struct klmirqd_registration klmirqd_state;
-
-
 
 void init_klmirqd(void)
 {
-	raw_spin_lock_init(&klmirqd_state.lock);
-
-	klmirqd_state.nr_threads = 0;
-	klmirqd_state.initialized = 1;
-	klmirqd_state.shuttingdown = 0;
-	INIT_LIST_HEAD(&klmirqd_state.threads);
 }
 
 static int __klmirqd_is_ready(void)
@@ -89,6 +88,7 @@ void kill_klmirqd(void)
 			klmirqd_state.nr_threads);
 
 		klmirqd_state.shuttingdown = 1;
+		mb();
 
 		list_for_each_safe(pos, q, &klmirqd_state.threads) {
 			struct klmirqd_info* info =
@@ -111,7 +111,7 @@ void kill_klmirqd(void)
 				raw_spin_lock_irqsave(&klmirqd_state.lock, flags);
 			}
 		}
-
+		klmirqd_state.shuttingdown = 0;
 		raw_spin_unlock_irqrestore(&klmirqd_state.lock, flags);
 	}
 }

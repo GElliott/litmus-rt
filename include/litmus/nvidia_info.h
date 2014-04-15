@@ -39,7 +39,6 @@ struct task_struct* get_nv_max_device_owner(u32 target_device_id);
 struct task_struct* get_and_lock_nvklmirqd_thread(u32 target_device_id,
 				unsigned long* flags);
 void unlock_nvklmirqd_thread(u32 target_device_id, unsigned long* flags);
-struct task_struct* get_nvklmirqd_thread(u32 target_device_id);
 
 typedef int (*klmirqd_tasklet_sched_t)(struct tasklet_struct *t,
 				struct task_struct* klmirqd_th);

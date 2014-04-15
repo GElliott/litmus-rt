@@ -548,7 +548,9 @@ u32 get_work_nv_device_num(const struct work_struct *t)
 
 
 typedef struct {
-	raw_spinlock_t	lock;
+	/* TODO: Check if this rwlock can be safely removed.
+	   Depends on how klmirqd syncs. */
+	rwlock_t rwlock;
 
 	/* GPU owners are organized in a priority-ordered heap */
 	struct binheap	owners;
@@ -557,13 +559,9 @@ typedef struct {
 	klmirqd_callback_t interrupt_callback;
 	struct task_struct* interrupt_thread;
 
-	/* TODO: make threads check for the ready flag */
-	unsigned int interrupt_ready:1;
-
 #ifdef CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED
 	klmirqd_callback_t workq_callback;
 	struct task_struct* workq_thread;
-	unsigned int workq_ready:1;
 #endif
 #endif
 
@@ -588,10 +586,9 @@ static int nvidia_launch_interrupt_cb(void *arg)
 
 	TRACE("nvklmirqd callback for GPU %d\n", reg_device_id);
 
-	raw_spin_lock_irqsave(&reg->lock, flags);
+	write_lock_irqsave(&reg->rwlock, flags);
 	reg->interrupt_thread = current;
-	reg->interrupt_ready = 1;
-	raw_spin_unlock_irqrestore(&reg->lock, flags);
+	write_unlock_irqrestore(&reg->rwlock, flags);
 
 	return 0;
 }
@@ -607,10 +604,9 @@ static int nvidia_launch_workq_cb(void *arg)
 
 	TRACE("nvklmworkerd callback for GPU %d\n", reg_device_id);
 
-	raw_spin_lock_irqsave(&reg->lock, flags);
+	write_lock_irqsave(&reg->rwlock, flags);
 	reg->workq_thread = current;
-	reg->workq_ready = 1;
-	raw_spin_unlock_irqrestore(&reg->lock, flags);
+	write_unlock_irqrestore(&reg->rwlock, flags);
 
 	return 0;
 }
@@ -629,7 +625,7 @@ static void nv_klmirqd_arm_dbg_timer(lt_t relative_time)
 {
 	lt_t when_to_fire = litmus_clock() + relative_time;
 
-	TRACE("next nv tasklet in %d ns\n", relative_time);
+	TRACE("next nv tasklet in %lld ns\n", relative_time);
 
 	__hrtimer_start_range_ns(&nv_klmirqd_dbg_timer.timer,
 					ns_to_ktime(when_to_fire),
@@ -642,9 +638,8 @@ static void nv_klmirqd_dbg_tasklet_func(unsigned long arg)
 {
 	lt_t now = litmus_clock();
 	nv_device_registry_t *reg = (nv_device_registry_t*)arg;
-	int gpunum = reg - &NV_DEVICE_REG[0];
 
-	TRACE("nv klmirqd routine invoked for GPU %d!\n", gpunum);
+	TRACE("nv klmirqd routine invoked for GPU %d!\n", reg - &NV_DEVICE_REG[0]);
 
 	/* set up the next timer -- within next 10ms */
 	nv_klmirqd_arm_dbg_timer(now % (NSEC_PER_MSEC * 10));
@@ -653,20 +648,24 @@ static void nv_klmirqd_dbg_tasklet_func(unsigned long arg)
 
 static enum hrtimer_restart nvklmirqd_timer_func(struct hrtimer *timer)
 {
+	unsigned long flags;
 	lt_t now = litmus_clock();
 	int gpu = (int)(now % num_online_gpus());
-	nv_device_registry_t *reg;
+	nv_device_registry_t *reg = &NV_DEVICE_REG[gpu];
+	struct task_struct* klmirqd_th;
 
 	TRACE("nvklmirqd_timer invoked!\n");
 
-	reg = &NV_DEVICE_REG[gpu];
+	klmirqd_th = get_and_lock_nvklmirqd_thread(gpu, &flags);
 
-	if (reg->interrupt_thread && reg->interrupt_ready) {
+	if (klmirqd_th) {
 		TRACE("Adding a tasklet for GPU %d\n", gpu);
-		litmus_tasklet_schedule(&reg->nv_klmirqd_dbg_tasklet, reg->interrupt_thread);
+		litmus_tasklet_schedule(&reg->nv_klmirqd_dbg_tasklet, klmirqd_th);
+		unlock_nvklmirqd_thread(gpu, &flags);
 	}
 	else {
 		TRACE("nv klmirqd is not ready!\n");
+		printk("nv klmirqd is not ready!\n");
 		/* set up the next timer -- within next 10ms */
 		nv_klmirqd_arm_dbg_timer(now % (NSEC_PER_MSEC * 10));
 	}
@@ -736,38 +735,31 @@ static int destroy_threads(nv_device_registry_t* reg, int device)
 	int ret = 0;
 	unsigned long flags;
 
-	if ((reg->interrupt_thread && reg->interrupt_ready)
+	if (reg->interrupt_thread
 #ifdef CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED
-		|| (reg->workq_thread && reg->workq_ready)
+		|| reg->workq_thread
 #endif
 		) {
-		raw_spin_lock_irqsave(&reg->lock, flags);
-		if (reg->interrupt_thread && reg->interrupt_ready) {
+		write_lock_irqsave(&reg->rwlock, flags);
+		if (reg->interrupt_thread) {
 			struct task_struct* th = reg->interrupt_thread;
 			reg->interrupt_thread = NULL;
-			mb();
-			reg->interrupt_ready = 0;
-			mb();
-			raw_spin_unlock_irqrestore(&reg->lock, flags);
+			write_unlock_irqrestore(&reg->rwlock, flags);
 			kill_klmirqd_thread(th);
 		}
 		else
-			raw_spin_unlock_irqrestore(&reg->lock, flags);
+			write_unlock_irqrestore(&reg->rwlock, flags);
 
 #ifdef CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED
-		raw_spin_lock_irqsave(&reg->lock, flags);
-		if (reg->workq_thread && reg->workq_ready) {
+		write_lock_irqsave(&reg->rwlock, flags);
+		if (reg->workq_thread) {
 			struct task_struct* th = reg->workq_thread;
 			reg->workq_thread = NULL;
-			mb();
-			reg->workq_ready = 0;
-			mb();
-
-			raw_spin_unlock_irqrestore(&reg->lock, flags);
+			write_unlock_irqrestore(&reg->rwlock, flags);
 			kill_klmirqd_thread(th);
 		}
 		else
-			raw_spin_unlock_irqrestore(&reg->lock, flags);
+			write_unlock_irqrestore(&reg->rwlock, flags);
 #endif /* end LITMUS_NVIDIA_WORKQ_ON_DEDICATED */
 	}
 
@@ -779,37 +771,34 @@ static int destroy_threads(nv_device_registry_t* reg, int device)
 /* called by Linux's schedule_work() to hand GPU work_structs to klmirqd */
 int nv_schedule_work_klmirqd(struct work_struct *work)
 {
+	int ret = 0; /* fail */
+
 	unsigned long flags;
-	u32 nvidia_device = get_work_nv_device_num(work);
+	u32 nvidia_device;
 	struct task_struct* klmirqd_th;
-	int ret = 0;
 
-	if (nvidia_device >= NV_DEVICE_NUM) {
-		TRACE("Could not determine GPU source of work item: %u\n", nvidia_device);
-		goto out;
-	}
-
+	nvidia_device = get_work_nv_device_num(work);
 	klmirqd_th = get_and_lock_nvklmworkqd_thread(nvidia_device, &flags);
-	if (unlikely(!klmirqd_th)) {
+
+	if (likely(klmirqd_th)) {
+		TRACE("Handling NVIDIA workq for device %u "
+			"(klmirqd: %s/%d) at %llu\n",
+			nvidia_device,
+			klmirqd_th->comm,
+			klmirqd_th->pid,
+			litmus_clock());
+
+		sched_trace_work_release(effective_priority(klmirqd_th),
+			nvidia_device);
+
+		ret = litmus_schedule_work(work, klmirqd_th);
+
+		unlock_nvklmirqd_thread(nvidia_device, &flags);
+	}
+	else {
 		TRACE("Could not find klmirqd thread for GPU %u\n", nvidia_device);
-		goto out;
 	}
 
-	TRACE("Handling NVIDIA workq for device %u (klmirqd: %s/%d) at %llu\n",
-		nvidia_device,
-		klmirqd_th->comm,
-		klmirqd_th->pid,
-		litmus_clock());
-
-	sched_trace_work_release(effective_priority(klmirqd_th),
-					nvidia_device);
-
-	if (likely(litmus_schedule_work(work, klmirqd_th))) {
-		unlock_nvklmworkqd_thread(nvidia_device, &flags);
-		ret = 1; /* success */
-	}
-
-out:
 	return ret;
 }
 #endif /* end LITMUS_NVIDIA_WORKQ_ON || WORKQ_ON_DEDICATED */
@@ -825,6 +814,7 @@ static int init_nv_device_reg(void)
 #ifdef CONFIG_LITMUS_SOFTIRQD
 	if (!klmirqd_is_ready()) {
 		TRACE("klmirqd is not ready!\n");
+		printk("klmirqd is not ready!\n");
 		return 0;
 	}
 #endif
@@ -833,9 +823,9 @@ static int init_nv_device_reg(void)
 	mb();
 
 	for(i = 0; i < num_online_gpus(); ++i) {
-		raw_spin_lock_init(&NV_DEVICE_REG[i].lock);
+		rwlock_init(&NV_DEVICE_REG[i].rwlock);
 		INIT_BINHEAP_HANDLE(&NV_DEVICE_REG[i].owners,
-						gpu_owner_max_priority_order);
+			gpu_owner_max_priority_order);
 
 #ifdef CONFIG_LITMUS_SOFTIRQD
 		(void)create_threads(&NV_DEVICE_REG[i], i);
@@ -854,7 +844,7 @@ static int init_nv_device_reg(void)
 	nv_klmirqd_arm_dbg_timer(NSEC_PER_MSEC * 1000);
 #endif
 
-	return(1);
+	return 1;
 }
 
 
@@ -923,13 +913,11 @@ static struct task_struct* __get_klm_thread(nv_device_registry_t* reg,
 #ifdef CONFIG_LITMUS_NVIDIA_WORKQ_ON
 	case WORKQ_TH:
 #endif
-		if(likely(reg->interrupt_ready))
-			klmirqd = reg->interrupt_thread;
+		klmirqd = reg->interrupt_thread;
 		break;
 #ifdef CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED
 	case WORKQ_TH:
-		if(likely(reg->workq_ready))
-			klmirqd = reg->workq_thread;
+		klmirqd = reg->workq_thread;
 		break;
 #endif
 	default:
@@ -944,13 +932,12 @@ static struct task_struct* __get_and_lock_klm_thread(nv_device_registry_t* reg,
 {
 	struct task_struct *klmirqd;
 
-	raw_spin_lock_irqsave(&reg->lock, *flags);
+	read_lock_irqsave(&reg->rwlock, *flags);
+
 	klmirqd = __get_klm_thread(reg, type);
 
-	if (!klmirqd) {
-		/* unlock if thread does not exist or is not ready */
-		raw_spin_unlock_irqrestore(&reg->lock, *flags);
-	}
+	if(!klmirqd)
+		read_unlock_irqrestore(&reg->rwlock, *flags);
 
 	return klmirqd;
 }
@@ -959,7 +946,7 @@ static void __unlock_klm_thread(nv_device_registry_t* reg,
 				unsigned long* flags, nvklmtype_t type)
 {
 	/* workq and interrupts share a lock per GPU */
-	raw_spin_unlock_irqrestore(&reg->lock, *flags);
+	read_unlock_irqrestore(&reg->rwlock, *flags);
 }
 
 struct task_struct* get_and_lock_nvklmirqd_thread(u32 target_device_id,
@@ -967,19 +954,19 @@ struct task_struct* get_and_lock_nvklmirqd_thread(u32 target_device_id,
 {
 	nv_device_registry_t *reg;
 	struct task_struct *th;
-	BUG_ON(target_device_id >= NV_DEVICE_NUM);
 
-	if (unlikely(nvidia_mod == NULL))
-		return NULL;
+	BUG_ON(target_device_id >= NV_DEVICE_NUM);
 
 	reg = &NV_DEVICE_REG[target_device_id];
 	th = __get_and_lock_klm_thread(reg, flags, INTERRUPT_TH);
 
-	barrier();
-	if (unlikely(nvidia_mod == NULL)) {
+#ifndef CONFIG_LITMUS_NV_KLMIRQD_DEBUG
+	/* mask out thread if nvidia mod not ready (unless we're in dbg mode) */
+	if (th && unlikely(nvidia_mod == NULL)) {
 		th = NULL;
 		__unlock_klm_thread(reg, flags, INTERRUPT_TH);
 	}
+#endif
 
 	return th;
 }
@@ -992,19 +979,6 @@ void unlock_nvklmirqd_thread(u32 target_device_id, unsigned long* flags)
 	__unlock_klm_thread(reg, flags, INTERRUPT_TH);
 }
 
-struct task_struct* get_nvklmirqd_thread(u32 target_device_id)
-{
-	/* should this function be allowed?
-	   who will use klmirqd thread without thread safety? */
-
-	unsigned long flags;
-	struct task_struct *klmirqd;
-	klmirqd = get_and_lock_nvklmirqd_thread(target_device_id, &flags);
-	if(klmirqd)
-		unlock_nvklmirqd_thread(target_device_id, &flags);
-	return klmirqd;
-}
-
 #if defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON) || \
 	defined(CONFIG_LITMUS_NVIDIA_WORKQ_ON_DEDICATED)
 struct task_struct* get_and_lock_nvklmworkqd_thread(u32 target_device_id,
@@ -1012,19 +986,19 @@ struct task_struct* get_and_lock_nvklmworkqd_thread(u32 target_device_id,
 {
 	nv_device_registry_t *reg;
 	struct task_struct *th;
-	BUG_ON(target_device_id >= NV_DEVICE_NUM);
 
-	if (unlikely(nvidia_mod == NULL))
-		return NULL;
+	BUG_ON(target_device_id >= NV_DEVICE_NUM);
 
 	reg = &NV_DEVICE_REG[target_device_id];
 	th = __get_and_lock_klm_thread(reg, flags, WORKQ_TH);
 
-	barrier();
-	if (unlikely(nvidia_mod == NULL)) {
+#ifndef CONFIG_LITMUS_NV_KLMIRQD_DEBUG
+	/* mask out thread if nvidia mod not ready (unless we're in dbg mode) */
+	if (th && unlikely(nvidia_mod == NULL)) {
 		th = NULL;
 		__unlock_klm_thread(reg, flags, WORKQ_TH);
 	}
+#endif
 
 	return th;
 }
@@ -1035,17 +1009,6 @@ void unlock_nvklmworkqd_thread(u32 target_device_id, unsigned long* flags)
 	BUG_ON(target_device_id >= NV_DEVICE_NUM);
 	reg = &NV_DEVICE_REG[target_device_id];
 	__unlock_klm_thread(reg, flags, WORKQ_TH);
-}
-
-
-struct task_struct* get_nvklmworkqd_thread(u32 target_device_id)
-{
-	unsigned long flags;
-	struct task_struct *klmirqd;
-	klmirqd = get_and_lock_nvklmworkqd_thread(target_device_id, &flags);
-	if(klmirqd)
-		unlock_nvklmworkqd_thread(target_device_id, &flags);
-	return klmirqd;
 }
 #endif /* end LITMUS_NVIDIA_WORKQ_ON && LITMUS_NVIDIA_WORKQ_ON_DEDICATED */
 
@@ -1073,6 +1036,8 @@ static int gpu_klmirqd_decrease_priority(struct task_struct *klmirqd,
 int nv_tasklet_schedule_klmirqd(struct tasklet_struct *t,
 				klmirqd_tasklet_sched_t klmirqd_func)
 {
+	int ret = 0; /* fail */
+
 	unsigned long flags;
 	u32 nvidia_device;
 	struct task_struct* klmirqd_th;
@@ -1091,12 +1056,15 @@ int nv_tasklet_schedule_klmirqd(struct tasklet_struct *t,
 		sched_trace_tasklet_release(effective_priority(klmirqd_th),
 						nvidia_device);
 
-		if(likely(klmirqd_func(t, klmirqd_th))) {
-			unlock_nvklmirqd_thread(nvidia_device, &flags);
-			return 1; /* success */
-		}
+		ret = klmirqd_func(t, klmirqd_th);
+
+		unlock_nvklmirqd_thread(nvidia_device, &flags);
 	}
-	return 0;
+	else {
+		TRACE("Could not find klmirqd thread for GPU %u\n", nvidia_device);
+	}
+
+	return ret;
 }
 #endif  /* end LITMUS_SOFTIRQD */
 

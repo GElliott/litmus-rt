@@ -567,13 +567,12 @@ static void check_for_preemptions(cedf_domain_t *cluster)
 
 			if (tsk_rt(task)->inh_task != NULL)
 			{
-				struct task_struct* inh = tsk_rt(task)->inh_task;
 				TRACE_TASK(task, "!!!! INH: (%s/%d): dead:%llu is_aux:%d  is_isrh:%d  backlog:%d\n",
-					inh->comm, inh->pid,
-					get_deadline(inh),
-					tsk_rt(inh)->is_aux_task,
-					tsk_rt(inh)->is_interrupt_task,
-					get_backlog(inh)
+					tsk_rt(task)->inh_task->comm, tsk_rt(task)->inh_task->pid,
+					get_deadline(tsk_rt(task)->inh_task),
+					tsk_rt(tsk_rt(task)->inh_task)->is_aux_task,
+					tsk_rt(tsk_rt(task)->inh_task)->is_interrupt_task,
+					get_backlog(tsk_rt(task)->inh_task)
 					);
 			}
 		}
@@ -1746,6 +1745,7 @@ static long cedf_admit_task(struct task_struct* tsk)
 {
 	struct budget_tracker_ops* ops = NULL;
 
+#ifdef CONFIG_SCHED_DEBUG_TRACE
 	if (remote_cluster(task_cpu(tsk)) != task_cpu_cluster(tsk)) {
 		int want = task_cpu_cluster(tsk) - cedf;
 		int have = remote_cluster(task_cpu(tsk)) - cedf;
@@ -1753,6 +1753,7 @@ static long cedf_admit_task(struct task_struct* tsk)
 			"WARNING: Incorrect cluster. In cluster %d wants cluster %d\n",
 				want, have);
 	}
+#endif
 
 	if (budget_enforced(tsk) || budget_signalled(tsk)) {
 		switch(get_drain_policy(tsk)) {
@@ -2681,10 +2682,6 @@ static long cedf_activate_plugin(void)
 			break;
 		}
 	}
-
-#ifdef CONFIG_LITMUS_SOFTIRQD
-	init_klmirqd();
-#endif
 
 #ifdef CONFIG_LITMUS_NVIDIA
 	init_nvidia_info();

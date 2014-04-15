@@ -44,4 +44,4 @@ endif
 obj-$(CONFIG_FEATHER_TRACE) += ft_event.o ftdev.o
 obj-$(CONFIG_SCHED_TASK_TRACE) += sched_task_trace.o sched_trace_external.o
 obj-$(CONFIG_SCHED_DEBUG_TRACE) += sched_trace.o
-obj-$(CONFIG_SCHED_OVERHEAD_TRACE) += trace.o
+obj-$(CONFIG_SCHED_OVERHEAD_TRACE) += trace.o trace_external.o

@@ -43,15 +43,4 @@ void __sched_trace_nv_interrupt_end_external(u32 device)
 	sched_trace_nv_interrupt_end((unsigned long)device);
 }
 EXPORT_SYMBOL(__sched_trace_nv_interrupt_end_external);
-
-#define EXX_TS(evt) \
-void __##evt(void) { evt; } \
-EXPORT_SYMBOL(__##evt);
-
-EXX_TS(TS_NV_TOPISR_START)
-EXX_TS(TS_NV_TOPISR_END)
-EXX_TS(TS_NV_BOTISR_START)
-EXX_TS(TS_NV_BOTISR_END)
-EXX_TS(TS_NV_RELEASE_BOTISR_START)
-EXX_TS(TS_NV_RELEASE_BOTISR_END)
 #endif /* end LITMUS_NVIDIA */

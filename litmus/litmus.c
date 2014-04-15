@@ -635,39 +635,41 @@ void litmus_exit_task(struct task_struct* tsk)
 	}
 }
 
+static DECLARE_RWSEM(plugin_switch_mutex);
+
+void litmus_plugin_switch_disable(void)
+{
+	down_read(&plugin_switch_mutex);
+}
+
+void litmus_plugin_switch_enable(void)
+{
+	up_read(&plugin_switch_mutex);
+}
+
 static int do_plugin_switch(void *_plugin)
 {
 	int ret;
 	struct sched_plugin* plugin = _plugin;
-	struct domain_proc_info* domain_info;
 
 	/* don't switch if there are active real-time tasks */
 	if (atomic_read(&rt_task_count) == 0) {
-		deactivate_domain_proc();
 		ret = litmus->deactivate_plugin();
-		if (0 != ret) {
-			/* reactivate the old proc info */
-			if (!litmus->get_domain_proc_info(&domain_info))
-				activate_domain_proc(domain_info);
+		if (0 != ret)
 			goto out;
-		}
 
-		litmus = plugin;  /* optimistic switch */
-		mb();
-		ret = litmus->activate_plugin();
+		ret = plugin->activate_plugin();
 
 		if (0 != ret) {
 			/* fail to Linux */
 			printk(KERN_INFO "Can't activate %s (%d).\n",
 				litmus->plugin_name, ret);
-			litmus = &linux_sched_plugin;
-			ret = litmus->activate_plugin();
+			plugin = &linux_sched_plugin;
+			ret = plugin->activate_plugin();
 			BUG_ON(ret);
 		}
 
-		if (!litmus->get_domain_proc_info(&domain_info))
-			activate_domain_proc(domain_info);
-
+		litmus = plugin;
 		printk(KERN_INFO "Switched to LITMUS^RT plugin %s.\n",
 						litmus->plugin_name);
 	} else
@@ -709,40 +711,44 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 	lt_t maybe_deadlock;
 	lt_t spin_time = 100000000; /* 100 ms */
 
+	struct domain_proc_info* domain_info;
+
 	BUG_ON(!plugin);
 
+	if (litmus != &linux_sched_plugin) {
 #ifdef CONFIG_LITMUS_SOFTIRQD
-	if (!klmirqd_is_dead()) {
-		struct kill_workers_data *wq_job =
-				kmalloc(sizeof(struct kill_workers_data), GFP_ATOMIC);
-		INIT_WORK(&wq_job->work, __kill_workers);
+		if (!klmirqd_is_dead()) {
+			struct kill_workers_data *wq_job =
+					kmalloc(sizeof(struct kill_workers_data), GFP_ATOMIC);
+			INIT_WORK(&wq_job->work, __kill_workers);
 
-		schedule_work(&wq_job->work);
+			schedule_work(&wq_job->work);
 
-		/* we're atomic, so try to spin until workers are shut down */
-		maybe_deadlock = litmus_clock();
-		while (!klmirqd_is_dead()) {
-			cpu_relax();
-			mb();
+			/* we're atomic, so try to spin until workers are shut down */
+			maybe_deadlock = litmus_clock();
+			while (!klmirqd_is_dead()) {
+				cpu_relax();
+				mb();
 
-			if (lt_before(maybe_deadlock + spin_time, litmus_clock())) {
-				printk("Could not kill klmirqd! Try again if running "
-					   "on uniprocessor.\n");
-				ret = -EBUSY;
-				goto out;
+				if (lt_before(maybe_deadlock + spin_time, litmus_clock())) {
+					printk("Could not kill klmirqd! Try again if running "
+						   "on uniprocessor.\n");
+					ret = -EBUSY;
+					goto out;
+				}
 			}
+			TRACE("klmirqd dead! task count = %d\n", atomic_read(&rt_task_count));
 		}
-
-		TRACE("klmirqd dead! task count = %d\n", atomic_read(&rt_task_count));
-	}
 #else
 #ifdef CONFIG_LITMUS_NVIDIA
-	/* nvidia handling is not threaded */
-	shutdown_nvidia_info();
+		/* nvidia handling is not threaded */
+		shutdown_nvidia_info();
 #endif
 #endif
+	}
 
 	maybe_deadlock = litmus_clock();
+	/* wait until real-time tasks exit */
 	while (atomic_read(&rt_task_count) != 0) {
 		cpu_relax();
 		mb();
@@ -753,8 +759,17 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 		}
 	}
 
+	down_write(&plugin_switch_mutex);
+
+	deactivate_domain_proc();
+
 	ret = stop_machine(do_plugin_switch, plugin, NULL);
 	TRACE("stop_machine returned: %d\n", ret);
+
+	if(!litmus->get_domain_proc_info(&domain_info))
+		activate_domain_proc(domain_info);
+
+	up_write(&plugin_switch_mutex);
 
 out:
 	return ret;

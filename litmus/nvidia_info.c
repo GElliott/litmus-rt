@@ -198,7 +198,7 @@ typedef struct litmus_nv_linux_state_s
 	struct timer_list rc_timer;
 
 	/* lock for linux-specific data, not used by core rm */
-#if !defined(CONFIG_NV_DRV_USES_MUTEX)
+#if !defined(CONFIG_GPUSYNC_NV_DRV_USE_MUTEX)
 	struct semaphore ldata_lock;
 #else
 	struct mutex ldata_lock;
@@ -209,7 +209,7 @@ typedef struct litmus_nv_linux_state_s
 #endif
 
 	/* lock for linux-specific alloc queue */
-#if !defined(CONFIG_NV_DRV_USES_MUTEX)
+#if !defined(CONFIG_GPUSYNC_NV_DRV_USE_MUTEX)
 	struct semaphore at_lock;
 #else
 	struct mutex at_lock;

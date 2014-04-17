@@ -563,7 +563,7 @@ config LITMUS_AFFINITY_AWARE_GPU_ASSINGMENT
 
 		If unsure, say No.
 
-config NV_DRV_USES_MUTEX
+config GPUSYNC_NV_DRV_USE_MUTEX
 	bool "Use mutex in NV driver."
 	depends on LITMUS_NVIDIA
 	default n

@@ -21,9 +21,9 @@
 
 #include <litmus/binheap.h>
 
-#if defined(CONFIG_NV_DRV_331_44)
+#if defined(CONFIG_NV_DRV_331_62)
 #define NV_MAJOR_V 331
-#define NV_MINOR_V 44
+#define NV_MINOR_V 62
 #elif defined(CONFIG_NV_DRV_331_13)
 #define NV_MAJOR_V 331
 #define NV_MINOR_V 13
@@ -94,7 +94,7 @@ typedef struct
 	NvU32	domain;
 	NvU8	bus;
 	NvU8	slot;
-#if NV_MINOR_V == 44
+#if NV_MINOR_V == 62
 	NvU8	function;
 #endif
 	NvU16	vendor_id;
@@ -204,7 +204,7 @@ typedef struct litmus_nv_linux_state_s
 	struct mutex ldata_lock;
 #endif
 
-#if NV_MAJOR_V >= 331 && NV_MINOR_V >= 44
+#if NV_MAJOR_V >= 331 && NV_MINOR_V >= 62
 	struct proc_dir_entry *proc_dir;
 #endif
 
@@ -218,7 +218,7 @@ typedef struct litmus_nv_linux_state_s
 	/* !!! This field is all that we're after to determine
 	   !!! the device number of the GPU that spawned a given
 	   vvv tasklet or workqueue item. */
-	NvU32 device_num;
+	NvU32 device_num; // field named 'minor_num' in later drivers
 	struct litmus_nv_linux_state_s *next;
 
 #if NV_MAJOR_V >= 319
@@ -490,7 +490,7 @@ EXPORT_SYMBOL(nv_tasklet_hi_schedule_first);
 
 inline u32 remap_nv_device_num(u32 device)
 {
-#ifdef CONFIG_NV_DRV_331_44
+#ifdef CONFIG_NV_DRV_331_62
 	/* Userspace and kernel enumerate GPUs in reversed orders on
 	   each NUMA node. GPUSync currently has the 'userspace' view
 	   of the world, so we need to remap.

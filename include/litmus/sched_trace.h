@@ -144,6 +144,17 @@ struct st_migration_data {
 } __attribute__((packed));
 
 
+struct st_pgm_param_data {
+	u32 node_type;
+	u16 graph_pid;
+	u8  __unused[10];
+} __attribute__((packed));
+
+struct st_pgm_release_data {
+	u64 release;	/* PGM-adjusted release time. */
+	u64 deadline;	/* PGM-adjusted deadline. */
+};
+
 /* passed as an argument to tracing for st_migration_data */
 struct migration_info {
 	u64 observed;
@@ -184,7 +195,10 @@ typedef enum {
 	ST_NV_INTERRUPT_END,
 
 	ST_MIGRATION,
-	ST_LOCK
+	ST_LOCK,
+
+	ST_PGM_PARAM,
+	ST_PGM_RELEASE
 } st_event_record_type_t;
 
 struct st_event_record {
@@ -215,6 +229,9 @@ struct st_event_record {
 
 		DATA(migration);
 		DATA(lock);
+
+		DATA(pgm_param);
+		DATA(pgm_release);
 	} data;
 } __attribute__((packed));
 
@@ -297,6 +314,11 @@ feather_callback void do_sched_trace_lock(unsigned long id,
 				struct task_struct* task,
 				unsigned long lock_id,
 				unsigned long acquired);
+
+feather_callback void do_sched_trace_pgm_param(unsigned long id,
+				struct task_struct* task);
+feather_callback void do_sched_trace_pgm_release(unsigned long id,
+				struct task_struct* task);
 #endif
 
 #else
@@ -323,6 +345,8 @@ feather_callback void do_sched_trace_lock(unsigned long id,
 #define trace_litmus_task_resume(t)
 #define trace_litmus_sys_release(start)
 #define trace_litmus_eff_prio_change(t, p)
+#define trace_litmus_pgm_param(t)
+#define trace_litmus_pgm_release(t)
 
 #endif
 
@@ -433,6 +457,18 @@ feather_callback void do_sched_trace_lock(unsigned long id,
 
 #define sched_trace_lock(t, lock_id, acquired) \
 	SCHED_TRACE3(SCHED_TRACE_BASE_ID + 21, do_sched_trace_lock, t, lock_id, acquired)
+
+#define sched_trace_pgm_param(t)	\
+	do {							\
+		SCHED_TRACE(SCHED_TRACE_BASE_ID + 22, do_sched_trace_pgm_param, t); \
+		trace_litmus_pgm_param(t);	\
+	} while(0)
+
+#define sched_trace_pgm_release(t)	\
+	do {							\
+		SCHED_TRACE(SCHED_TRACE_BASE_ID + 23, do_sched_trace_pgm_release, t); \
+		trace_litmus_pgm_release(t);\
+	} while(0)
 
 #define sched_trace_quantum_boundary() /* NOT IMPLEMENTED */
 

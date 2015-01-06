@@ -54,6 +54,10 @@
 #include <litmus/affinity.h>
 #endif
 
+#ifdef CONFIG_SCHED_PGM
+#include <litmus/pgm.h>
+#endif
+
 #ifdef CONFIG_LITMUS_LOCKING
 #include <litmus/kfmlp_lock.h>
 #endif
@@ -1315,15 +1319,74 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	if (exists) {
 		TRACE_TASK(prev,
 			   "blocks:%d out_of_time:%d np:%d completed:%d preempt:%d "
-			   "state:%d sig:%d is_aux:%d is_intr:%d\n",
+			   "state:%d sig:%d is_boosted:%d is_aux:%d is_intr:%d\n",
 			   blocks, out_of_time, np, sleep, preempt,
 			   prev->state, signal_pending(prev),
+			   is_priority_boosted(entry->scheduled),
 			   tsk_rt(prev)->is_aux_task,
 			   tsk_rt(prev)->is_interrupt_task);
 	}
 	if (entry->linked && preempt)
 		TRACE_TASK(prev, "will be preempted by %s/%d\n",
 			   entry->linked->comm, entry->linked->pid);
+
+#ifdef CONFIG_SCHED_PGM
+	if (exists) {
+		if (is_pgm_sending(entry->scheduled)) {
+			if (!is_pgm_satisfied(entry->scheduled)) {
+				if (!is_priority_boosted(entry->scheduled)) {
+					TRACE_TASK(entry->scheduled, "is sending PGM tokens and needs boosting.\n");
+					BUG_ON(is_pgm_satisfied(entry->scheduled));
+
+					/* We are either sending tokens or waiting for tokes.
+					   If waiting: Boost priority so we'll be scheduled
+						immediately when needed tokens arrive.
+					   If sending: Boost priority so no one (specifically, our
+						consumers) will preempt us while signalling the token
+						transmission.
+					*/
+					tsk_rt(entry->scheduled)->priority_boosted = 1;
+					tsk_rt(entry->scheduled)->boost_start_time = litmus_clock();
+
+					if (likely(!blocks)) {
+						unlink(entry->scheduled);
+						cedf_job_arrival(entry->scheduled);
+						/* we may regain the processor */
+						if (preempt) {
+							preempt = entry->scheduled != entry->linked;
+							if (!preempt) {
+								TRACE_TASK(entry->scheduled, "blocked preemption by lazy boosting.\n");
+							}
+						}
+					}
+				}
+			}
+			else { /* sending is satisfied */
+				tsk_rt(entry->scheduled)->ctrl_page->pgm_sending = 0;
+				tsk_rt(entry->scheduled)->ctrl_page->pgm_satisfied = 0;
+
+				if (is_priority_boosted(entry->scheduled)) {
+					TRACE_TASK(entry->scheduled,
+							"is done sending PGM tokens must relinquish boosting.\n");
+					/* clear boosting */
+					tsk_rt(entry->scheduled)->priority_boosted = 0;
+					if(likely(!blocks)) {
+						/* recheck priority */
+						unlink(entry->scheduled);
+						cedf_job_arrival(entry->scheduled);
+						/* we may lose the processor */
+						if (!preempt) {
+							preempt = entry->scheduled != entry->linked;
+							if (preempt) {
+								TRACE_TASK(entry->scheduled, "preempted by lazy unboosting.\n");
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+#endif
 
 #ifdef CONFIG_REALTIME_AUX_TASKS
 	if (tsk_rt(prev)->is_aux_task &&
@@ -1584,6 +1647,13 @@ static void cedf_task_wake_up(struct task_struct *t)
 		   when jobs complete or when budget expires. */
 		tsk_rt(t)->completed = 0;
 	}
+
+#ifdef CONFIG_SCHED_PGM
+	if (is_pgm_waiting(t)) {
+		/* shift out release/deadline, if needed */
+		setup_pgm_release(t);
+	}
+#endif
 
 #ifdef CONFIG_REALTIME_AUX_TASKS
 	if (tsk_rt(t)->has_aux_tasks && !tsk_rt(t)->hide_from_aux_tasks) {

@@ -39,7 +39,7 @@ TRACE_EVENT(litmus_task_param,
 		__entry->partition = get_partition(t);
 	),
 
-	TP_printk("period(%d, %Lu).\nwcet(%d, %Lu).\n",
+	TP_printk("period(%u, %Lu).\nwcet(%d, %Lu).\n",
 		__entry->pid, __entry->period,
 		__entry->pid, __entry->wcet)
 );
@@ -285,6 +285,55 @@ TRACE_EVENT(litmus_eff_prio_change,
 			(__entry->inh_deadline <= (__entry->prev_inh_pid ?
 				__entry->prev_inh_deadline : __entry->deadline)) ?
 				"INCREASE" : "DECREASE" : "DECREASE")
+);
+
+/* Tracing PGM node parameters */
+TRACE_EVENT(litmus_pgm_param,
+
+	TP_PROTO(struct task_struct *t),
+
+	TP_ARGS(t),
+
+	TP_STRUCT__entry(
+		__field( pid_t, pid )
+		__field( pgm_node_type_t, node_type )
+		__field( pid_t, graph_pid )
+	),
+
+	TP_fast_assign(
+		__entry->pid		= t ? t->pid  : 0;
+		__entry->node_type  = t ? t->rt_param.task_params.pgm_type : PGM_NOT_A_NODE;
+		__entry->graph_pid  = t ? t->tgid : 0;
+	),
+
+	TP_printk("pgm node (%u, node type = %d) in graph (%u)\n",
+		__entry->pid, __entry->node_type, __entry->graph_pid)
+);
+
+/* Tracing PGM-adjusted job release */
+TRACE_EVENT(litmus_pgm_release,
+
+	TP_PROTO(struct task_struct *t),
+
+	TP_ARGS(t),
+
+	TP_STRUCT__entry(
+		__field( pid_t,	 pid )
+		__field( unsigned int,  job )
+		__field( lt_t,	  release )
+		__field( lt_t,	  deadline	)
+	),
+
+	TP_fast_assign(
+		__entry->pid	= t ? t->pid : 0;
+		__entry->job	= t ? t->rt_param.job_params.job_no : 0;
+		__entry->release	= get_release(t);
+		__entry->deadline   = get_deadline(t);
+	),
+
+	TP_printk("release(job(%u, %u)): %Lu\ndeadline(job(%u, %u)): %Lu\n",
+		__entry->pid, __entry->job, __entry->release,
+		__entry->pid, __entry->job, __entry->deadline)
 );
 
 #endif /* _SCHED_TASK_TRACEPOINT_H */

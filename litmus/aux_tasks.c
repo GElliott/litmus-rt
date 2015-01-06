@@ -469,7 +469,7 @@ static long __do_enable_aux_tasks(int flags)
 						leader->comm, leader->pid, t->comm, t->pid);
 			}
 		}
-		/* don't let aux tasks get aux tasks get aux tasks of their own */
+		/* don't let aux tasks get aux tasks of their own */
 		else if (!tsk_rt(t)->is_aux_task) {
 			if (!tsk_rt(t)->has_aux_tasks) {
 				TRACE_CUR("task in %s/%d: %s/%d:\n",

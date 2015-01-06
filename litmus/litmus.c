@@ -169,6 +169,12 @@ asmlinkage long sys_set_rt_task_param(pid_t pid,
 			   pid, tp.budget_signal_policy);
 		goto out_unlock;
 	}
+	if (tp.pgm_type < PGM_NOT_A_NODE || tp.pgm_type > PGM_INTERNAL) {
+		printk(KERN_INFO "litmus: real-time task %d rejected "
+		       "because of unknown PGM node type specified (%d)\n",
+		       pid, tp.pgm_type);
+		goto out_unlock;
+	}
 
 	target->rt_param.task_params = tp;
 
@@ -462,12 +468,6 @@ static void reinit_litmus_state(struct task_struct* p, int restore)
 	/* Cleanup everything else. */
 	memset(&p->rt_param, 0, sizeof(p->rt_param));
 
-#ifdef CONFIG_REALTIME_AUX_TASKS
-	/* also clear out the aux_data. the !restore case is only called on
-	 * fork (initial thread creation). */
-	memset(&p->aux_data, 0, sizeof(p->aux_data));
-#endif
-
 	/* Restore preserved fields. */
 	if (restore) {
 		p->rt_param.task_params = user_config;
@@ -538,6 +538,7 @@ static long __litmus_admit_task(struct task_struct* tsk)
 		if (!retval) {
 			sched_trace_task_name(tsk);
 			sched_trace_task_param(tsk);
+			sched_trace_pgm_param(tsk);
 			atomic_inc(&rt_task_count);
 		}
 	}
@@ -793,6 +794,11 @@ void litmus_fork(struct task_struct* p)
 		/* clean out any litmus related state, don't preserve anything */
 		reinit_litmus_state(p, 0);
 	}
+
+#ifdef CONFIG_REALTIME_AUX_TASKS
+	/* Don't let child get aux_data state. */
+	memset(&p->aux_data, 0, sizeof(p->aux_data));
+#endif
 
 	/* od tables are never inherited across a fork */
 	p->od_table = NULL;

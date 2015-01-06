@@ -82,6 +82,15 @@ typedef enum {
 									   automatically become aux threads. */
 } auxiliary_thread_flags_t;
 
+/* PGM node types. */
+typedef enum {
+	PGM_NOT_A_NODE,
+	PGM_SRC,
+	PGM_SINK,
+	PGM_SRC_SINK, /* Both a source and sink node. */
+	PGM_INTERNAL  /* Neither a source or sink node. */
+} pgm_node_type_t;
+
 /* We use the common priority interpretation "lower index == higher priority",
  * which is commonly used in fixed-priority schedulability analysis papers.
  * So, a numerically lower priority value implies higher scheduling priority,
@@ -114,6 +123,8 @@ struct rt_task {
 	budget_drain_policy_t drain_policy;
 	budget_signal_policy_t budget_signal_policy; /* ignored by pfair */
 	release_policy_t release_policy;
+
+	pgm_node_type_t	pgm_type;
 };
 
 union np_flag {
@@ -178,6 +189,11 @@ struct control_page {
 	uint64_t ts_syscall_start;  /* Feather-Trace cycles */
 	uint64_t irq_syscall_start; /* Snapshot of irq_count when the syscall
 				     * started. */
+
+	/* Flags from userspace signifying PGM wait states. */
+	volatile uint32_t	pgm_waiting;    /* waiting for tokens */
+	volatile uint32_t	pgm_sending;    /* sending tokens */
+	volatile uint32_t	pgm_satisfied;  /* done waiting/sending */
 
 	/* to be extended */
 };

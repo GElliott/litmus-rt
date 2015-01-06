@@ -150,6 +150,21 @@ config BUG_ON_MIGRATION_DEADLOCK
 		BUG() triggers, the scheduler is broken and turning off this option
 		won't fix it.
 
+config SCHED_PGM
+	bool "PGM Support"
+	default n
+	depends on LITMUS_LOCKING && ALLOW_EARLY_RELEASE && PLUGIN_CEDF
+	help
+	  Include infrastructure for scheduling PGM graphs. Since PGM token
+	  constraints are not (yet) implemented in the kernel, a job must
+	  tell Litmus when it is waiting for tokens. Litmus boost's the
+	  priority of waiting jobs (which are expected to be well-behaved
+	  and sleep while waiting for tokens) to ensure bounded priority
+	  inversions. Litmus may also change a jobs release/deadline depending
+	  upon when the jobs input tokens are generated.
+
+	  Currently, only supported by C-EDF.
+
 endmenu
 
 
@@ -348,7 +363,7 @@ config SCHED_TASK_TRACE
 config SCHED_TASK_TRACE_SHIFT
 	int "Buffer size for sched_trace_xxx() events"
 	depends on SCHED_TASK_TRACE
-	range 8 13
+	range 8 28
 	default 9
 	help
 		Select the buffer size of sched_trace_xxx() events as a power of two.
@@ -575,7 +590,7 @@ config GPUSYNC_NV_DRV_USE_MUTEX
 config NV_DEVICE_NUM
 	int "Number of NVIDIA GPUs."
 	depends on LITMUS_NVIDIA
-	range 1 16
+	range 1 64
 	default "1"
 	help
 		Should be (<= to the number of CPUs) and
@@ -583,7 +598,7 @@ config NV_DEVICE_NUM
 
 choice
 	prompt "CUDA/Driver Version Support"
-	default NV_DRV_331_44
+	default NV_DRV_331_62
 	depends on LITMUS_NVIDIA
 	help
 		Select the version of NVIDIA driver to support.
@@ -594,11 +609,11 @@ choice
 		<driver>/kernel/nv.h and nv-linux.h in the driver's
 		GPL shim layer.
 
-config NV_DRV_331_44
-	bool "331.44 (CUDA 6.0 RC1)"
+config NV_DRV_331_62
+	bool "331.62 (CUDA 6.0)"
 	depends on LITMUS_NVIDIA && REALTIME_AUX_TASKS
 	help
-		NV Driver 331.44. (Released with CUDA 6.0 RC1.)
+		NV Driver 331.62. (Released with CUDA 6.0.)
 
 config NV_DRV_331_13
 	bool "331.13 (post-CUDA 5.5)"

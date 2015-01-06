@@ -431,3 +431,25 @@ feather_callback void do_sched_trace_nv_interrupt_end(unsigned long id,
 	}
 }
 EXPORT_SYMBOL(do_sched_trace_nv_interrupt_end);
+
+feather_callback void do_sched_trace_pgm_param(unsigned long id, unsigned long _task)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record* rec = get_record(ST_PGM_PARAM, t);
+	if (rec) {
+		rec->data.pgm_param.node_type = tsk_rt(t)->task_params.pgm_type;
+		rec->data.pgm_param.graph_pid = t->tgid;
+		put_record(rec);
+	}
+}
+
+feather_callback void do_sched_trace_pgm_release(unsigned long id, unsigned long _task)
+{
+	struct task_struct *t = (struct task_struct*) _task;
+	struct st_event_record* rec = get_record(ST_PGM_RELEASE, t);
+	if (rec) {
+		rec->data.pgm_release.release  = get_release(t);
+		rec->data.pgm_release.deadline = get_deadline(t);
+		put_record(rec);
+	}
+}

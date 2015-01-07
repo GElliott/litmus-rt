@@ -192,6 +192,7 @@ struct control_page {
 
 	/* Flags from userspace signifying PGM wait states. */
 	volatile uint32_t	pgm_waiting;    /* waiting for tokens */
+	volatile uint32_t	pgm_check_deadline; /* deadline will be shifted on wake-up */
 	volatile uint32_t	pgm_sending;    /* sending tokens */
 	volatile uint32_t	pgm_satisfied;  /* done waiting/sending */
 

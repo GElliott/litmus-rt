@@ -1649,7 +1649,7 @@ static void cedf_task_wake_up(struct task_struct *t)
 	}
 
 #ifdef CONFIG_SCHED_PGM
-	if (is_pgm_waiting(t)) {
+	if (is_pgm_waiting_with_deadline_shift(t)) {
 		/* shift out release/deadline, if needed */
 		setup_pgm_release(t);
 	}
@@ -1692,8 +1692,14 @@ static void cedf_task_block(struct task_struct *t)
 	unlink(t);
 
 #ifdef CONFIG_REALTIME_AUX_TASKS
-	if (tsk_rt(t)->has_aux_tasks && !tsk_rt(t)->hide_from_aux_tasks) {
-
+	if (tsk_rt(t)->has_aux_tasks &&
+	    !tsk_rt(t)->hide_from_aux_tasks
+#ifdef CONFIG_SCHED_PGM
+	    /* Don't enable aux tasks if we're dealing with tokens.
+	       We know that no aux tasks are involved. */
+	    && !(is_pgm_waiting(t) || is_pgm_sending(t))
+#endif
+	   ) {
 		TRACE_CUR("%s/%d is blocked so aux tasks may inherit.\n",
 						t->comm, t->pid);
 		enable_aux_task_owner(t);
@@ -1701,8 +1707,14 @@ static void cedf_task_block(struct task_struct *t)
 #endif
 
 #ifdef CONFIG_LITMUS_NVIDIA
-	if (tsk_rt(t)->held_gpus && !tsk_rt(t)->hide_from_gpu) {
-
+	if (tsk_rt(t)->held_gpus &&
+	    !tsk_rt(t)->hide_from_gpu
+#ifdef CONFIG_SCHED_PGM
+	    /* Don't enable klmirqd threads if we're dealing with tokens.
+	       We know that no gpu interrupts are involved. */
+	    && !(is_pgm_waiting(t) || is_pgm_sending(t))
+#endif
+	   ) {
 		TRACE_CUR("%s/%d is blocked so klmirqd threads may inherit.\n",
 						t->comm, t->pid);
 		enable_gpu_owner(t);

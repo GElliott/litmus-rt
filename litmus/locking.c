@@ -109,9 +109,16 @@ static void destroy_generic_lock(obj_type_t type, void* obj)
 
 asmlinkage long sys_litmus_lock(int lock_od)
 {
+	struct task_struct* t = current;
 	long err = -EINVAL;
 	struct od_table_entry* entry;
 	struct litmus_lock* l;
+
+	if(!is_realtime(t)) {
+		TRACE_CUR("Cannot request lock because task is not real-time\n");
+		err = -EPERM;
+		goto out;
+	}
 
 	TS_SYSCALL_IN_START;
 
@@ -143,15 +150,23 @@ asmlinkage long sys_litmus_lock(int lock_od)
 
 	TS_SYSCALL_OUT_START;
 
+out:
 	return err;
 }
 
 asmlinkage long sys_litmus_unlock(int lock_od)
 {
+	struct task_struct* t = current;
 	long err = -EINVAL;
 	struct od_table_entry* entry;
 	struct litmus_lock* l;
 	unsigned long flags;
+
+	if(!is_realtime(t)) {
+		TRACE_CUR("Cannot unlock because task is not real-time\n");
+		err = -EPERM;
+		goto out;
+	}
 
 	TS_SYSCALL_IN_START;
 
@@ -185,14 +200,22 @@ asmlinkage long sys_litmus_unlock(int lock_od)
 
 	TS_SYSCALL_OUT_START;
 
+out:
 	return err;
 }
 
 asmlinkage long sys_litmus_should_yield_lock(int lock_od)
 {
+	struct task_struct* t = current;
 	long err = -EINVAL;
 	struct od_table_entry* entry;
 	struct litmus_lock* l;
+
+	if(!is_realtime(t)) {
+		TRACE_CUR("Cannot yield lock because task is not real-time\n");
+		err = -EPERM;
+		goto out;
+	}
 
 	entry = get_entry_for_od(lock_od);
 	if (entry && is_lock(entry)) {
@@ -208,6 +231,7 @@ asmlinkage long sys_litmus_should_yield_lock(int lock_od)
 		}
 	}
 
+out:
 	return err;
 }
 
@@ -592,6 +616,12 @@ asmlinkage long sys_litmus_dgl_lock(void* __user usr_dgl_ods, int dgl_size)
 	long err = -EINVAL;
 	int dgl_ods[MAX_DGL_SIZE];
 
+	if (!is_realtime(t)) {
+		TRACE_CUR("Cannot request locks because task is not real-time\n");
+		err = -EPERM;
+		goto out;
+	}
+
 	if(dgl_size > MAX_DGL_SIZE || dgl_size < 1)
 		goto out;
 
@@ -600,11 +630,6 @@ asmlinkage long sys_litmus_dgl_lock(void* __user usr_dgl_ods, int dgl_size)
 
 	if(__copy_from_user(&dgl_ods, usr_dgl_ods, dgl_size*(sizeof(*dgl_ods))))
 		goto out;
-
-	if (!is_realtime(t)) {
-		err = -EPERM;
-		goto out;
-	}
 
 	if (dgl_size == 1) {
 		/* DGL size of 1. Just call regular singular lock. */
@@ -706,8 +731,15 @@ static long do_litmus_dgl_unlock(struct litmus_lock* dgl_locks[], int dgl_size)
 
 asmlinkage long sys_litmus_dgl_unlock(void* __user usr_dgl_ods, int dgl_size)
 {
+	struct task_struct *t = current;
 	long err = -EINVAL;
 	int dgl_ods[MAX_DGL_SIZE];
+
+	if (!is_realtime(t)) {
+		TRACE_CUR("Cannot unlock locks because task is not real-time\n");
+		err = -EPERM;
+		goto out;
+	}
 
 	if(dgl_size > MAX_DGL_SIZE || dgl_size < 1)
 		goto out;
@@ -759,8 +791,15 @@ out:
 asmlinkage long sys_litmus_dgl_should_yield_lock(void* __user usr_dgl_ods,
 				int dgl_size)
 {
+	struct task_struct *t = current;
 	long err = -EINVAL;
 	int dgl_ods[MAX_DGL_SIZE];
+
+	if (!is_realtime(t)) {
+		TRACE_CUR("Cannot yield locks because task is not real-time\n");
+		err = -EPERM;
+		goto out;
+	}
 
 	if(dgl_size > MAX_DGL_SIZE || dgl_size < 1)
 		goto out;

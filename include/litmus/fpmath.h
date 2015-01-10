@@ -5,7 +5,8 @@
 #include <linux/math64.h>
 #else
 #include <stdint.h>
-#define abs(x) (((x) < 0) ? -(x) : x)
+// don't use "abs()" since that name collides with standard functions.
+#define user_fp_abs(x) (((x) < 0) ? -(x) : x)
 #endif
 
 // Use 64-bit because we want to track things at the nanosecond scale.
@@ -102,7 +103,11 @@ static inline fp_t _neg(fp_t x)
 
 static inline fp_t _abs(fp_t x)
 {
+#ifdef __KERNEL__
 	return _fp(abs(x.val));
+#else
+	return _fp(user_fp_abs(x.val));
+#endif
 }
 
 /* works the same as casting float/double to integer */

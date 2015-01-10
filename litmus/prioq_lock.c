@@ -1550,8 +1550,9 @@ struct litmus_lock* prioq_mutex_new(struct litmus_lock_ops* ops)
 	LOCKDEP_DYNAMIC_ALLOC(mutex, &mutex->lock);
 
 	((struct litmus_lock*)mutex)->nest.hp_waiter_ptr = &mutex->hp_waiter;
-
 //	((struct litmus_lock*)mutex)->proc = &prioq_proc_ops;
+
+	TRACE_CUR("Created new fifo mutex at %p\n", mutex);
 
 	return &mutex->litmus_lock;
 }

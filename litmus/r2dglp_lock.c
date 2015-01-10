@@ -177,7 +177,7 @@ static void r2dglp_add_global_list(struct r2dglp_semaphore *sem,
 		sbinheap_add(&node->snode, &sem->top_m, r2dglp_heap_node_t, snode);
 	}
 	else {
-		TRACE_CUR("Trivially adding %s/%d to not-top-m global list.\n",
+		TRACE_CUR("Adding %s/%d to not-top-m global list.\n",
 				  t->comm, t->pid);
 
 		binheap_add(&node->dnode, &sem->not_top_m, r2dglp_heap_node_t, dnode);
@@ -202,7 +202,6 @@ static void r2dglp_del_global_list(struct r2dglp_semaphore *sem,
 		if(!binheap_empty(&sem->not_top_m)) {
 			r2dglp_heap_node_t *promoted =
 				binheap_top_entry(&sem->not_top_m, r2dglp_heap_node_t, dnode);
-
 			TRACE_CUR("Promoting %s/%d to top-m\n",
 					  promoted->task->comm, promoted->task->pid);
 
@@ -223,6 +222,15 @@ static void r2dglp_del_global_list(struct r2dglp_semaphore *sem,
 	}
 }
 
+static int r2dglp_is_among_mth_highest(struct r2dglp_semaphore *sem,
+				r2dglp_heap_node_t *node)
+{
+	BUG_ON(!(sbinheap_is_in_heap(&node->snode) || binheap_is_in_heap(&node->dnode)));
+	if(sbinheap_is_in_this_heap(&node->snode, &sem->top_m)) {
+		return 1;
+	}
+	return 0;
+}
 
 static void r2dglp_add_donees(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
@@ -624,6 +632,8 @@ static void __r2dglp_enqueue_on_pq(struct r2dglp_semaphore *sem,
 
 	wait->pq_node.task = wait->task; /* copy over task (little redundant...) */
 
+	r2dglp_add_global_list(sem, wait->task, &wait->global_heap_node);
+
 	binheap_add(&wait->pq_node.dnode, &sem->priority_queue,
 				r2dglp_heap_node_t, dnode);
 
@@ -711,11 +721,11 @@ static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
 					   &tsk_rt(donee)->hp_blocked_tasks);
 		/* WARNING: have not updated inh_prio! */
 
-		/* Add old donor to PQ. */
-		__r2dglp_enqueue_on_pq(sem, old_wait);
-
 		/* Remove old donor from the global heap. */
 		r2dglp_del_global_list(sem, old_donor, &old_wait->global_heap_node);
+
+		/* Add old donor to PQ. */
+		__r2dglp_enqueue_on_pq(sem, old_wait);
 	}
 
 	/* Add back donee's node to the donees heap with increased prio */
@@ -958,6 +968,7 @@ static void r2dglp_move_pq_to_fq(struct r2dglp_semaphore *sem,
 			  r2dglp_get_idx(sem, fq));
 #endif
 
+	r2dglp_del_global_list(sem, t, &wait->global_heap_node);
 	__drop_from_pq(sem, wait);
 	__r2dglp_enqueue_on_fq(sem, fq, wait,
 						  &wait->global_heap_node,
@@ -1273,10 +1284,29 @@ void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 
 		/* treat donor as if it had donated to a task other than 't'.
 		 * this triggers the termination of the donation relationship. */
-		if (always_terminate_donation)
+		if (always_terminate_donation) {
 			other_donor_info = donor_info;
+		}
 	}
-	else if(!sbinheap_empty(&sem->donors)) { /* No donor, move any donor to FQ */
+	/* We can move someone else's donor to FQ.
+	   2015 Thinking:
+	     We can only do this if there isn't a waiting task in
+	     PQ that is among the top-m requests. (If there is such
+	     a task in PQ, then there is only one, and it is
+	     at the head).
+	   2012/2013 Thinking:
+	     We don't have to worry about PQ. The priority of such a job
+		 ensures that it is never among the top-m.
+		 ** We have forgotten the proof behind this reasoning! However,
+		    experimentation hasn't disproven this case yet. **
+	   Let's go with 2015 reasoning---it's the more conservative choice.
+	 */
+	else if(!sbinheap_empty(&sem->donors) &&
+	        (binheap_empty(&sem->priority_queue) ||
+	         !r2dglp_is_among_mth_highest(sem,
+			      binheap_top_entry(&sem->priority_queue,
+				      r2dglp_heap_node_t, node))))
+	{
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 		other_donor_info = (sem->aff_obs) ?
 			sem->aff_obs->ops->advise_donor_to_fq(sem->aff_obs, fq) :
@@ -1318,13 +1348,23 @@ void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 
 		r2dglp_move_donor_to_fq(sem, fq_of_new_on_fq, other_donor_info);
 	}
-	else if(!binheap_empty(&sem->priority_queue)) {  /* No donors, so move PQ */
+	/* No eligible donors, so move PQ */
+	else if(!binheap_empty(&sem->priority_queue)) {
 		r2dglp_heap_node_t *pq_node = binheap_top_entry(&sem->priority_queue,
 						r2dglp_heap_node_t, node);
 		r2dglp_wait_state_t *pq_wait = container_of(pq_node, r2dglp_wait_state_t,
 						pq_node);
 
 		new_on_fq = pq_wait->task;
+
+#ifdef CONFIG_SCHED_DEBUG_TRACE
+		if(!sbinheap_empty(&sem->donors)) {
+			/* This never seems to fire. In 2012/2013, we thought that it
+			   would be impossible for this to fire. However, we've forgotten
+			   that reasoning... perhaps we were right. */
+			TRACE_TASK(t, "Moving a pq waiter over a donor.");
+		}
+#endif
 
 #ifdef CONFIG_LITMUS_AFFINITY_LOCKING
 		if(sem->aff_obs) {
@@ -1351,9 +1391,8 @@ void r2dglp_move_next_to_fq(struct r2dglp_semaphore *sem,
 
 		r2dglp_move_pq_to_fq(sem, fq_of_new_on_fq, pq_wait);
 	}
+	/* No PQ and this queue is empty, so steal. */
 	else if(allow_stealing && fq->count == 0) {
-		/* No PQ and this queue is empty, so steal. */
-
 		r2dglp_wait_state_t *fq_wait;
 
 		TRACE_TASK(t, "Looking to steal a request for fq %d...\n",
@@ -1598,6 +1637,7 @@ void r2dglp_abort_request(struct r2dglp_semaphore *sem, struct task_struct *t,
 	{
 		case R2DGLP_PQ:
 			TRACE_TASK(t, "Aborting request while on PQ.\n");
+			r2dglp_del_global_list(sem, t, &wait->global_heap_node);
 			/* No one inherits from waiters in PQ. Just drop the request. */
 			__drop_from_pq(sem, wait);
 			break;

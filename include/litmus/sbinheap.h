@@ -185,6 +185,7 @@ void __sbinheap_insert(struct sbinheap_node *new_node, struct sbinheap *heap);
 
 /* Allocates, initializes, and adds a node to the heap */
 static inline void __sbinheap_add(struct sbinheap* heap,
+//static void noinline __sbinheap_add(struct sbinheap* heap,
 				void* data, struct sbinheap_node** ret)
 {
 	idx_t idx;

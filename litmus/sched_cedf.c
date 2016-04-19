@@ -1306,11 +1306,11 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	exists      = entry->scheduled != NULL;
 	blocks      = exists && !is_running(entry->scheduled);
 	out_of_time = exists &&
-				  budget_enforced(entry->scheduled) &&
-				  bt_flag_is_set(entry->scheduled, BTF_BUDGET_EXHAUSTED);
-	np 	    = exists && is_np(entry->scheduled);
-	sleep	    = exists && is_completed(entry->scheduled);
-	preempt     = entry->scheduled != entry->linked;
+	              budget_enforced(entry->scheduled) &&
+	              bt_flag_is_set(entry->scheduled, BTF_BUDGET_EXHAUSTED);
+	np          = exists && is_np(entry->scheduled);
+	sleep       = exists && is_completed(entry->scheduled);
+	preempt     = (entry->scheduled != entry->linked);
 
 #ifdef WANT_ALL_SCHED_EVENTS
 	TRACE_TASK(prev, "invoked cedf_schedule.\n");
@@ -1334,17 +1334,14 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	if (exists) {
 		if (is_pgm_sending(entry->scheduled)) {
 			if (!is_pgm_satisfied(entry->scheduled)) {
+				/* Don't boost priority if we're already running non-preemptively. */
 				if (!is_priority_boosted(entry->scheduled)) {
 					TRACE_TASK(entry->scheduled, "is sending PGM tokens and needs boosting.\n");
 					BUG_ON(is_pgm_satisfied(entry->scheduled));
 
-					/* We are either sending tokens or waiting for tokes.
-					   If waiting: Boost priority so we'll be scheduled
-						immediately when needed tokens arrive.
-					   If sending: Boost priority so no one (specifically, our
-						consumers) will preempt us while signalling the token
-						transmission.
-					*/
+					/* Boost priority so no one (specifically, our
+					   consumers) will preempt us while signalling the token
+					   transmission. */
 					tsk_rt(entry->scheduled)->priority_boosted = 1;
 					tsk_rt(entry->scheduled)->boost_start_time = litmus_clock();
 
@@ -1353,7 +1350,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 						cedf_job_arrival(entry->scheduled);
 						/* we may regain the processor */
 						if (preempt) {
-							preempt = entry->scheduled != entry->linked;
+							preempt = (entry->scheduled != entry->linked);
 							if (!preempt) {
 								TRACE_TASK(entry->scheduled, "blocked preemption by lazy boosting.\n");
 							}
@@ -1376,7 +1373,7 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 						cedf_job_arrival(entry->scheduled);
 						/* we may lose the processor */
 						if (!preempt) {
-							preempt = entry->scheduled != entry->linked;
+							preempt = (entry->scheduled != entry->linked);
 							if (preempt) {
 								TRACE_TASK(entry->scheduled, "preempted by lazy unboosting.\n");
 							}
@@ -1434,6 +1431,8 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 		}
 	}
 #endif
+
+	WARN_ON(np && (sleep || blocks || out_of_time));
 
 	/* Request a sys_exit_np() call if we would like to preempt but cannot.
 	 * We need to make sure to update the link structure anyway in case

@@ -45,4 +45,7 @@ __SYSCALL(__NR_set_aux_tasks, sys_set_aux_tasks)
 #define __NR_sched_trace_event	__LSC(17)
 __SYSCALL(__NR_sched_trace_event, sys_sched_trace_event)
 
-#define NR_litmus_syscalls 18
+#define __NR_litmus_show_state __LSC(18)
+__SYSCALL(__NR_litmus_show_state, sys_show_state)
+
+#define NR_litmus_syscalls 19

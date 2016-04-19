@@ -417,7 +417,8 @@ mutex_lock_nested(struct mutex *lock, unsigned int subclass)
 	__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, subclass, NULL, _RET_IP_);
 }
 
-EXPORT_SYMBOL_GPL(mutex_lock_nested);
+//EXPORT_SYMBOL_GPL(mutex_lock_nested);
+EXPORT_SYMBOL(mutex_lock_nested);
 
 void __sched
 _mutex_lock_nest_lock(struct mutex *lock, struct lockdep_map *nest)
@@ -426,7 +427,8 @@ _mutex_lock_nest_lock(struct mutex *lock, struct lockdep_map *nest)
 	__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, 0, nest, _RET_IP_);
 }
 
-EXPORT_SYMBOL_GPL(_mutex_lock_nest_lock);
+//EXPORT_SYMBOL_GPL(_mutex_lock_nest_lock);
+EXPORT_SYMBOL(_mutex_lock_nest_lock);
 
 int __sched
 mutex_lock_killable_nested(struct mutex *lock, unsigned int subclass)
@@ -434,7 +436,9 @@ mutex_lock_killable_nested(struct mutex *lock, unsigned int subclass)
 	might_sleep();
 	return __mutex_lock_common(lock, TASK_KILLABLE, subclass, NULL, _RET_IP_);
 }
-EXPORT_SYMBOL_GPL(mutex_lock_killable_nested);
+
+//EXPORT_SYMBOL_GPL(mutex_lock_killable_nested);
+EXPORT_SYMBOL(mutex_lock_killable_nested);
 
 int __sched
 mutex_lock_interruptible_nested(struct mutex *lock, unsigned int subclass)
@@ -444,7 +448,8 @@ mutex_lock_interruptible_nested(struct mutex *lock, unsigned int subclass)
 				   subclass, NULL, _RET_IP_);
 }
 
-EXPORT_SYMBOL_GPL(mutex_lock_interruptible_nested);
+//EXPORT_SYMBOL_GPL(mutex_lock_interruptible_nested);
+EXPORT_SYMBOL(mutex_lock_interruptible_nested);
 #endif
 
 /*

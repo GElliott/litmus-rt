@@ -1514,13 +1514,17 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	if (is_realtime(p))
 		TRACE_TASK(p, "try_to_wake_up() state:%d\n", p->state);
 
-	smp_wmb();
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
+
+//	smp_wmb();
+	smp_mb();
 	raw_spin_lock_irqsave(&p->pi_lock, flags);
 	if (!(p->state & state))
 		goto out;
 
 	success = 1; /* we're going to change ->state */
 	cpu = task_cpu(p);
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 
 	if (p->on_rq && ttwu_remote(p, wake_flags))
 		goto stat;
@@ -1531,7 +1535,10 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 * this task as prev, wait until its done referencing the task.
 	 */
 	while (p->on_cpu)
+	{
 		cpu_relax();
+//		BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
+	}
 	/*
 	 * Pairs with the smp_wmb() in finish_lock_switch().
 	 */
@@ -1543,18 +1550,21 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	if (is_realtime(p))
 		goto litmus_out_activate;
 
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 	p->sched_contributes_to_load = !!task_contributes_to_load(p);
 	p->state = TASK_WAKING;
 
 	if (p->sched_class->task_waking)
 		p->sched_class->task_waking(p);
 
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 	cpu = select_task_rq(p, SD_BALANCE_WAKE, wake_flags);
 	if (task_cpu(p) != cpu) {
 		wake_flags |= WF_MIGRATED;
 		set_task_cpu(p, cpu);
 	}
 
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 litmus_out_activate:
 #endif /* CONFIG_SMP */
 
@@ -1565,6 +1575,8 @@ out:
 	if (is_realtime(p))
 		TRACE_TASK(p, "try_to_wake_up() done state:%d\n", p->state);
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
+
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 
 	return success;
 }
@@ -3026,6 +3038,9 @@ static void __sched __schedule(void)
 	int cpu;
 
 need_resched:
+
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
+
 	preempt_disable();
 	sched_state_entered_schedule();
 	cpu = smp_processor_id();
@@ -3037,6 +3052,10 @@ need_resched:
 	 * if the previous one is no longer valid after context switch.
 	 */
 litmus_need_resched_nonpreemptible:
+
+
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
+
 	TS_SCHED_START;
 	sched_trace_task_switch_away(prev);
 
@@ -3045,7 +3064,11 @@ litmus_need_resched_nonpreemptible:
 	if (sched_feat(HRTICK))
 		hrtick_clear(rq);
 
+//	smp_wmb();
+	smp_mb();
 	raw_spin_lock_irq(&rq->lock);
+
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 
 	switch_count = &prev->nivcsw;
 	if (prev->state && !(preempt_count() & PREEMPT_ACTIVE)) {
@@ -3071,10 +3094,15 @@ litmus_need_resched_nonpreemptible:
 		switch_count = &prev->nvcsw;
 	}
 
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
+
 	pre_schedule(rq, prev);
 
 	if (unlikely(!rq->nr_running))
 		idle_balance(cpu, rq);
+
+
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 
 	put_prev_task(rq, prev);
 	next = pick_next_task(rq);
@@ -3102,10 +3130,12 @@ litmus_need_resched_nonpreemptible:
 		TS_SCHED_END(prev);
 		raw_spin_unlock_irq(&rq->lock);
 	}
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 
 	TS_SCHED2_START(prev);
 	sched_trace_task_switch_to(current);
 
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 	post_schedule(rq);
 
 	if (is_realtime(current) &&
@@ -3117,6 +3147,7 @@ litmus_need_resched_nonpreemptible:
 		TS_SCHED2_END(prev);
 		goto litmus_need_resched_nonpreemptible;
 	}
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 
 	sched_preempt_enable_no_resched();
 
@@ -3125,6 +3156,7 @@ litmus_need_resched_nonpreemptible:
 	if (need_resched())
 		goto need_resched;
 
+//	BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 	srp_ceiling_block();
 }
 
@@ -4511,7 +4543,10 @@ int __cond_resched_lock(spinlock_t *lock)
 		if (resched)
 			__cond_resched();
 		else
+		{
+//			BUG_ON(is_realtime(current) && current->rt_param.ctrl_page && current->rt_param.ctrl_page->dbg);
 			cpu_relax();
+		}
 		ret = 1;
 		spin_lock(lock);
 	}
@@ -4786,6 +4821,23 @@ void sched_show_task(struct task_struct *p)
 		printk(KERN_CONT "  running task    ");
 	else
 		printk(KERN_CONT " %016lx ", thread_saved_pc(p));
+
+	if (is_realtime(p))
+	{
+		printk(KERN_CONT "boosted:%u knp:%d unp:%d #held:%u p_w:%d p_cd:%d p_s:%d p_sat:%d dbg:%d waiting:%p holding:%p\n",
+			p->rt_param.priority_boosted,
+			is_kernel_np(p), is_user_np(p),
+			p->rt_param.num_locks_held,
+			(p->rt_param.ctrl_page) ? p->rt_param.ctrl_page->pgm_waiting : -1,
+			(p->rt_param.ctrl_page) ? p->rt_param.ctrl_page->pgm_check_deadline : -1,
+			(p->rt_param.ctrl_page) ? p->rt_param.ctrl_page->pgm_sending : -1,
+			(p->rt_param.ctrl_page) ? p->rt_param.ctrl_page->pgm_satisfied : -1,
+			(p->rt_param.ctrl_page) ? p->rt_param.ctrl_page->dbg : -1,
+			(p->rt_param.ctrl_page) ? p->rt_param.ctrl_page->waiting : NULL,
+			(p->rt_param.ctrl_page) ? p->rt_param.ctrl_page->holding : NULL
+			);
+	}
+
 #endif
 #ifdef CONFIG_DEBUG_STACK_USAGE
 	free = stack_not_used(p);

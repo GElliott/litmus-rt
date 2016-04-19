@@ -69,6 +69,29 @@ void bheap_node_free(struct bheap_node* hn)
 struct release_heap* release_heap_alloc(int gfp_flags);
 void release_heap_free(struct release_heap* rh);
 
+asmlinkage long sys_litmus_show_state(pid_t target, int val)
+{
+	int retval = 0;
+	struct task_struct* t;
+
+	read_lock_irq(&tasklist_lock);
+
+	t = find_task_by_vpid(target);
+	if(t && is_realtime(t) && tsk_rt(t)->ctrl_page) {
+		tsk_rt(t)->ctrl_page->dbg = val;
+	}
+
+	if(target == 0 && val != 0) {
+		show_state();
+		BUG();
+	}
+
+//out:
+	read_unlock_irq(&tasklist_lock);
+
+	return retval;
+}
+
 /*
  * sys_set_task_rt_param
  * @pid: Pid of the task which scheduling parameters must be changed

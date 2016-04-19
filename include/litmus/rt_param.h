@@ -196,6 +196,9 @@ struct control_page {
 	volatile uint32_t	pgm_sending;    /* sending tokens */
 	volatile uint32_t	pgm_satisfied;  /* done waiting/sending */
 
+	volatile uint32_t   dbg;
+	volatile void*      waiting;
+	volatile void*      holding;
 	/* to be extended */
 };
 

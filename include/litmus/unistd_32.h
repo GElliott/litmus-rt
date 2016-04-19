@@ -27,4 +27,6 @@
 
 #define __NR_sched_trace_event	__LSC(17)
 
-#define NR_litmus_syscalls 18
+#define __NR_litmus_show_state __LSC(18)
+
+#define NR_litmus_syscalls 19

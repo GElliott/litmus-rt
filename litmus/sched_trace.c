@@ -52,9 +52,11 @@ void sched_trace_log_message(const char* fmt, ...)
 	size_t		len;
 	char*		buf;
 
+#if 1
 	if (!atomic_read(&reader_cnt))
 		/* early exit if nobody is listening */
 		return;
+#endif
 
 	va_start(args, fmt);
 	local_irq_save(flags);

@@ -684,17 +684,18 @@ static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
 	donee = donee_node->task;
 
 	TRACE_TASK(t, "Donee selected: %s/%d\n", donee->comm, donee->pid);
-
 	TRACE_CUR("Temporarily removing %s/%d from donee list.\n",
 			  donee->comm, donee->pid);
 
     /* Remove from donee list */
 	sbinheap_delete(&donee_node->snode, &sem->donees);
 
+#if 0
 	wait->donee_info = donee_node;
 
 	/* Add t to donor heap. */
 	sbinheap_add(&wait->snode, &sem->donors, r2dglp_wait_state_t, snode);
+#endif
 
 	/* Now adjust the donee's priority. */
 
@@ -727,6 +728,11 @@ static void r2dglp_enqueue_on_donor(struct r2dglp_semaphore *sem,
 		/* Add old donor to PQ. */
 		__r2dglp_enqueue_on_pq(sem, old_wait);
 	}
+
+	/* Add t to the donor heap. Must do after removal of (possible) donor
+	   above to avoid overruning fixed size of the donor heap. */
+	wait->donee_info = donee_node;
+	sbinheap_add(&wait->snode, &sem->donors, r2dglp_wait_state_t, snode);
 
 	/* Add back donee's node to the donees heap with increased prio */
     TRACE_CUR("Adding %s/%d back to donee list.\n", donee->comm, donee->pid);
@@ -960,8 +966,8 @@ static void r2dglp_move_pq_to_fq(struct r2dglp_semaphore *sem,
 				struct fifo_queue *fq,
 				r2dglp_wait_state_t *wait)
 {
-#ifdef CONFIG_SCHED_DEBUG_TRACE
 	struct task_struct *t = wait->task;
+#ifdef CONFIG_SCHED_DEBUG_TRACE
 	TRACE_CUR("PQ request %s/%d being moved to fq %d\n",
 			  t->comm,
 			  t->pid,
